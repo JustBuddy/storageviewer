@@ -58,7 +58,6 @@
     </plurals>
 
     <string name="protected_folder">Protected by Android · counted in Apps</string>
-    <string name="protected_note">Android doesn\'t let any app look inside Android/data and Android/obb. Their contents are counted in each app\'s size under Apps.</string>
     <string name="empty_folder">Empty folder</string>
 
     <string name="access_files_title">See what\'s using your storage</string>
@@ -95,11 +94,9 @@
     <string name="app_row_breakdown">Data %1$s · Cache %2$s</string>
     <string name="apps_subtitle">%1$s · %2$s</string>
     <string name="app_storage">App storage</string>
-    <string name="cache_hint">%1$s of this is cache, which apps can rebuild. You can clear it from each app\'s App info page.</string>
 
     <string name="error_no_viewer">No app can open this file</string>
     <string name="error_no_file_manager">No file manager found</string>
     <string name="error_no_app_info">App info isn\'t available</string>
     <string name="error_no_settings">This settings page isn\'t available</string>
-    <string name="read_only_note">Read-only: StorageViewer opens items in other apps and never changes anything itself.</string>
 </resources>

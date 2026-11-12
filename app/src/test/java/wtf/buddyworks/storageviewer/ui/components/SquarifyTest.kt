@@ -2,6 +2,7 @@ package wtf.buddyworks.storageviewer.ui.components
 
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
@@ -86,5 +87,14 @@ class SquarifyTest {
             val expected = bounds.width * bounds.height * v / total
             assertEquals(expected, rects[i].width.toDouble() * rects[i].height, expected * 0.001 + 0.5)
         }
+    }
+
+    @Test
+    fun treemapOnlyWhenItSaysMoreThanTheList() {
+        // A handful of items: the list shows them all.
+        assertFalse(treemapWorthShowing(itemCount = 5, ownTiles = 5))
+        // One tile beside "N other items".
+        assertFalse(treemapWorthShowing(itemCount = 40, ownTiles = 1))
+        assertTrue(treemapWorthShowing(itemCount = 18, ownTiles = 2))
     }
 }

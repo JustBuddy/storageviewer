@@ -56,7 +56,6 @@
     </plurals>
 
     <string name="protected_folder">Durch Android geschützt · zählt zu Apps</string>
-    <string name="protected_note">Android lässt keine App in Android/data und Android/obb hineinsehen. Deren Inhalt ist in der Größe der jeweiligen App unter Apps enthalten.</string>
     <string name="empty_folder">Leerer Ordner</string>
 
     <string name="access_files_title">Sieh, was Speicherplatz belegt</string>
@@ -93,11 +92,9 @@
     <string name="app_row_breakdown">Daten %1$s · Cache %2$s</string>
     <string name="apps_subtitle">%1$s · %2$s</string>
     <string name="app_storage">App-Speicher</string>
-    <string name="cache_hint">Davon sind %1$s Cache, den Apps neu erstellen können. Du kannst ihn auf der App-Info-Seite jeder App leeren.</string>
 
     <string name="error_no_viewer">Keine App kann diese Datei öffnen</string>
     <string name="error_no_file_manager">Kein Dateimanager gefunden</string>
     <string name="error_no_app_info">App-Info ist nicht verfügbar</string>
     <string name="error_no_settings">Diese Einstellungsseite ist nicht verfügbar</string>
-    <string name="read_only_note">Nur lesen: StorageViewer öffnet Objekte in anderen Apps und ändert selbst nie etwas.</string>
 </resources>

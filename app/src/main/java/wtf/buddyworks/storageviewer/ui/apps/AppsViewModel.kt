@@ -17,7 +17,8 @@ class AppsViewModel(private val app: StorageViewerApp) : ViewModel() {
 
     var hasUsageAccess by mutableStateOf(Access.hasUsageAccess(app))
         private set
-    var filter by mutableStateOf(AppFilter.All)
+    /** Downloaded first: preinstalled apps are rarely what frees up space. */
+    var filter by mutableStateOf(AppFilter.Downloaded)
     var query by mutableStateOf("")
     var searching by mutableStateOf(false)
 

@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -41,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
@@ -57,11 +59,11 @@ import wtf.buddyworks.storageviewer.data.FileCategory
 import wtf.buddyworks.storageviewer.data.Format
 import wtf.buddyworks.storageviewer.data.StorageNode
 import wtf.buddyworks.storageviewer.system.Handoff
+import wtf.buddyworks.storageviewer.system.Thumbnails
 import wtf.buddyworks.storageviewer.ui.categoryColor
 import wtf.buddyworks.storageviewer.ui.categoryIcon
 import wtf.buddyworks.storageviewer.ui.categoryLabel
 import wtf.buddyworks.storageviewer.ui.components.BarPart
-import wtf.buddyworks.storageviewer.ui.components.IconBadge
 import wtf.buddyworks.storageviewer.ui.components.InsetDivider
 import wtf.buddyworks.storageviewer.ui.components.LegendDot
 import wtf.buddyworks.storageviewer.ui.components.OverviewSectionTitle
@@ -72,7 +74,9 @@ import wtf.buddyworks.storageviewer.ui.components.TreemapChild
 import wtf.buddyworks.storageviewer.ui.components.TreemapItem
 import wtf.buddyworks.storageviewer.ui.components.TreemapMinTileHeight
 import wtf.buddyworks.storageviewer.ui.components.TreemapMinTileWidth
+import wtf.buddyworks.storageviewer.ui.components.inkFor
 import wtf.buddyworks.storageviewer.ui.components.planTreemap
+import wtf.buddyworks.storageviewer.ui.components.treemapWorthShowing
 import wtf.buddyworks.storageviewer.ui.theme.OneUi
 import wtf.buddyworks.storageviewer.ui.tint
 
@@ -212,17 +216,8 @@ fun StorageOverview(
                 }
                 items(largest.size, key = { "largest:" + largest[it].id }, contentType = { "file" }) { index ->
                     val file = largest[index]
-                    FileRow(file, rootPath, rootName, isFirst = index == 0) { Handoff.openFile(context, file.path) }
+                    FileRow(file, rootPath, rootName, icons, isFirst = index == 0) { Handoff.openFile(context, file.path) }
                 }
-            }
-
-            item(key = "note", contentType = "note") {
-                Text(
-                    stringResource(if (node.restricted) R.string.protected_note else R.string.read_only_note),
-                    style = OneUi.type.caption,
-                    color = colors.textSection,
-                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp),
-                )
             }
         }
     }
@@ -293,7 +288,7 @@ private fun FolderTreemap(
     } ?: return
     val shown = candidates.take(plan.tiles)
     val shownBytes = shown.sumOf { it.size }
-    if (shownBytes.toDouble() / node.size < MinCoverage) return
+    if (shownBytes.toDouble() / node.size < MinCoverage || !treemapWorthShowing(kids.size, shown.size)) return
     val restCount = kids.size - shown.size
     val restBytes = node.size - shownBytes
 
@@ -318,7 +313,15 @@ private fun FolderTreemap(
                 children = preview,
             )
         } else {
-            TreemapItem(key = child, value = child.size, color = color, label = child.name, detail = Format.bytes(child.size))
+            TreemapItem(
+                key = child,
+                value = child.size,
+                color = color,
+                label = child.name,
+                detail = Format.bytes(child.size),
+                icon = if (Thumbnails.kindOf(child) != null) ({ TileThumbnail(child, color) }) else null,
+                iconOnlyWhenSmall = false,
+            )
         }
     } + listOfNotNull(
         if (plan.hasRest && restCount > 0) {
@@ -345,6 +348,23 @@ private fun FolderTreemap(
         if (target.isDirectory) onFolder(target) else onFile(target)
     }
 }
+
+/** A file tile's preview, or its type icon in the tile's ink until (or unless) there is one. */
+@Composable
+private fun TileThumbnail(file: StorageNode, tileColor: Color) {
+    FileThumbnail(file, TileIconSize) {
+        Box(
+            Modifier
+                .size(TileIconSize)
+                .background(Color.Black.copy(alpha = 0.12f), RoundedCornerShape(TileIconSize * 0.25f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(categoryIcon(file.category), contentDescription = null, tint = inkFor(tileColor), modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+private val TileIconSize = 30.dp
 
 /**
  * What a folder is made of: a slim bar plus one chip per file type. It sits under the title
@@ -418,7 +438,7 @@ private fun Breadcrumbs(node: StorageNode, rootName: String, onFocus: (StorageNo
 }
 
 @Composable
-private fun FileRow(file: StorageNode, rootPath: String, rootName: String, isFirst: Boolean, onClick: () -> Unit) {
+private fun FileRow(file: StorageNode, rootPath: String, rootName: String, icons: ItemIcons, isFirst: Boolean, onClick: () -> Unit) {
     val colors = OneUi.colors
     val location = file.parent?.path?.removePrefix(rootPath)?.trim('/')?.replace("/", " › ")
         ?.ifEmpty { rootName } ?: rootName
@@ -432,7 +452,7 @@ private fun FileRow(file: StorageNode, rootPath: String, rootName: String, isFir
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconBadge(categoryIcon(file.category), categoryColor(file.category), size = 40.dp)
+            FileIcon(file, icons)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(file.name, style = OneUi.type.itemTitle, color = colors.textPrimary, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
