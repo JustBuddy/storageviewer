@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// One version for the whole app, set in gradle.properties. Release tags (v1.2.3) must match it.
+val appVersion = providers.gradleProperty("storageviewer.version").get()
+val appVersionCode = appVersion.split('.').map { it.toInt() }.let { (major, minor, patch) ->
+    require(minor < 100 && patch < 100) { "storageviewer.version parts above 99 do not fit the version code" }
+    major * 10_000 + minor * 100 + patch
+}
+
+// Release signing: keystore.properties next to settings.gradle.kts locally (gitignored), or
+// SIGNING_* environment variables in CI. Without either, release builds use the debug key.
+val keystoreProperties = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun signingValue(property: String, env: String): String? = keystoreProperties.getProperty(property) ?: System.getenv(env)
 
 android {
     namespace = "wtf.buddyworks.storageviewer"
@@ -11,8 +27,20 @@ android {
         applicationId = "wtf.buddyworks.storageviewer"
         minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
+    }
+
+    signingConfigs {
+        val storeFilePath = signingValue("storeFile", "SIGNING_STORE_FILE")
+        if (storeFilePath != null) {
+            create("release") {
+                storeFile = file(storeFilePath)
+                storePassword = signingValue("storePassword", "SIGNING_STORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "SIGNING_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -20,8 +48,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Personal sideloaded build: sign release with the debug key until a real key exists.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
