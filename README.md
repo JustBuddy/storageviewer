@@ -30,6 +30,7 @@ StorageViewer is a read-only storage and app-size inspector for Android. It's st
 - **Treemaps.** Any folder can be shown as tiles sized by bytes and coloured by file type. Tap a folder tile to go into it, or tap a file to open it.
 - **Thumbnails.** Files show a preview where they have one: photos, video frames, album art, the first page of a PDF and the icon inside an APK.
 - **Apps by size.** Every installed app, largest first, with its app, data and cache sizes. You can filter by downloaded, all or system apps, and search.
+- **Stays current.** When you come back from My Files, a viewer or App info, StorageViewer rescans in the background, so deleted files and uninstalled apps drop out. Results older than 10 minutes are refreshed the same way.
 - **Made for foldables.** The cover screen gets one pane and a large One UI title. Unfolded, the tree and the overview sit on either side of the hinge. In tabletop mode the overview moves above the fold. Folding or unfolding keeps your place.
 - **Light and dark.** The app follows the system theme and takes its accent colour from your colour palette.
 - **Strictly read-only.** StorageViewer never changes anything on your phone ([more below](#-read-only-by-design)).
@@ -72,7 +73,7 @@ StorageViewer never writes, moves or deletes anything. Every tap is passed to th
 | Tap | Goes to |
 |---|---|
 | Folder | Opens it in the tree. On the inner screen it also shows on the right. Long-press offers *Open in My Files*. |
-| File | Its default viewer, with read-only access |
+| File | Its default viewer, with read-only access. APKs open in My Files, which can install them. |
 | App | Android's App info page |
 
 Under the hood, the scan only calls `readdir` and `lstat`. Thumbnails open files read-only and are kept in memory only. Nothing is cached on disk, including MediaStore's thumbnail cache. The `FileProvider` that hands files to viewers refuses anything except read access.
@@ -118,7 +119,7 @@ keyAlias=storageviewer
 keyPassword=…
 ```
 
-CI reads the same values from `SIGNING_*` environment variables. If neither is set, release builds fall back to the debug key. Android won't install a debug-signed copy over a release-signed one, or the other way round. Keep a backup of the keystore, because updates only install over a copy signed with the same key.
+CI reads the same values from `SIGNING_*` environment variables. If neither is set, release builds fall back to the debug key and Gradle prints a warning. Android won't install a debug-signed copy over a release-signed one, or the other way round. Keep a backup of the keystore, because updates only install over a copy signed with the same key.
 
 ### Releases
 
@@ -127,7 +128,7 @@ The version lives in `gradle.properties` (`storageviewer.version`), and the vers
 1. Bump `storageviewer.version` and merge.
 2. Tag the merge commit `v<version>` and push the tag, for example `git tag v0.2.0 && git push origin v0.2.0`.
 
-The [Release APK](.github/workflows/release.yml) workflow runs the unit tests, builds the signed APK and attaches `StorageViewer-<version>.apk` to a GitHub release for the tag. It fails if the tag and `storageviewer.version` don't match. Pull requests run the same build and keep the APK as a run artifact.
+The [Release APK](.github/workflows/release.yml) workflow runs the unit tests and lint, builds the signed APK and attaches `StorageViewer-<version>.apk` to a GitHub release for the tag. It fails if the tag and `storageviewer.version` don't match. Pull requests run the same build and keep the APK as a run artifact. Only the job that publishes the release can write to the repository.
 
 The workflow needs these repository secrets: `SIGNING_KEYSTORE_BASE64` (the keystore, base64-encoded), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`.
 

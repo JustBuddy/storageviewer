@@ -23,7 +23,9 @@
 
     <string name="scanning">Wird analysiert…</string>
     <string name="scanning_progress">%1$s Dateien · %2$s</string>
-    <string name="scan_failed">Analyse fehlgeschlagen: %1$s</string>
+    <string name="scan_failed_title">Analyse fehlgeschlagen</string>
+    <string name="apps_failed_title">Apps konnten nicht geladen werden</string>
+    <string name="refreshing">Wird aktualisiert</string>
     <string name="tree_summary">%1$s · %2$s</string>
 
     <plurals name="items">
@@ -73,6 +75,12 @@
     <string name="action_open">Öffnen</string>
     <string name="action_open_in_files">In Eigene Dateien öffnen</string>
     <string name="action_show_in_files">In Eigene Dateien zeigen</string>
+    <string name="action_try_again">Erneut versuchen</string>
+    <string name="action_expand">Ausklappen</string>
+    <string name="action_collapse">Einklappen</string>
+    <string name="action_more_options">Weitere Optionen</string>
+    <string name="state_expanded">Ausgeklappt</string>
+    <string name="state_collapsed">Eingeklappt</string>
 
     <string name="overview_title">Übersicht</string>
     <string name="largest_files">Größte Dateien inkl. Unterordner</string>
@@ -97,4 +105,5 @@
     <string name="error_no_file_manager">Kein Dateimanager gefunden</string>
     <string name="error_no_app_info">App-Info ist nicht verfügbar</string>
     <string name="error_no_settings">Diese Einstellungsseite ist nicht verfügbar</string>
+    <string name="apk_in_files">Die APK wird in Eigene Dateien gezeigt, wo sie installiert werden kann</string>
 </resources>

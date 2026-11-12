@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SpaceDashboard
@@ -53,6 +54,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -68,10 +72,9 @@ import wtf.buddyworks.storageviewer.data.ScanResult
 import wtf.buddyworks.storageviewer.data.ScanState
 import wtf.buddyworks.storageviewer.data.StorageNode
 import wtf.buddyworks.storageviewer.system.Handoff
-import wtf.buddyworks.storageviewer.ui.AccessCard
 import wtf.buddyworks.storageviewer.ui.CardMargin
 import wtf.buddyworks.storageviewer.ui.PaneConfig
-import wtf.buddyworks.storageviewer.ui.ProgressCard
+import wtf.buddyworks.storageviewer.ui.NoticeCard
 import wtf.buddyworks.storageviewer.ui.appsColor
 import wtf.buddyworks.storageviewer.ui.categoryColor
 import wtf.buddyworks.storageviewer.ui.categoryLabel
@@ -82,6 +85,7 @@ import wtf.buddyworks.storageviewer.ui.components.LegendDot
 import wtf.buddyworks.storageviewer.ui.components.SectionHeader
 import wtf.buddyworks.storageviewer.ui.components.SegmentedBar
 import wtf.buddyworks.storageviewer.ui.components.ToolbarIcon
+import wtf.buddyworks.storageviewer.ui.components.ToolbarProgress
 import wtf.buddyworks.storageviewer.ui.components.groupItem
 import wtf.buddyworks.storageviewer.ui.theme.OneUi
 
@@ -89,18 +93,26 @@ import wtf.buddyworks.storageviewer.ui.theme.OneUi
 sealed interface TreeRow {
     val key: Any
 
+    /** [path] is the row's key: unlike the node it stays the same across rescans. */
     class Item(
         val node: StorageNode,
+        val path: String,
         val depth: Int,
         val expanded: Boolean,
         val canExpand: Boolean,
         val parentSize: Long,
     ) : TreeRow {
-        override val key: Any get() = node.id
+        override val key: Any get() = path
     }
 
-    class More(val parent: StorageNode, val depth: Int, val hidden: Int, val hiddenBytes: Long) : TreeRow {
-        override val key: Any get() = "more:${parent.id}"
+    class More(
+        val parent: StorageNode,
+        val parentPath: String,
+        val depth: Int,
+        val hidden: Int,
+        val hiddenBytes: Long,
+    ) : TreeRow {
+        override val key: Any get() = "more:$parentPath"
     }
 }
 
@@ -116,24 +128,26 @@ fun buildTreeRows(
 ): List<TreeRow> {
     val rows = ArrayList<TreeRow>()
     fun kidsOf(node: StorageNode) = if (foldersOnly) node.subfolders else node.children
-    fun add(parent: StorageNode, depth: Int) {
+    // Paths are built once here on the way down, rather than walking up from every node.
+    fun add(parent: StorageNode, parentPath: String, depth: Int) {
         val kids = kidsOf(parent)
-        val limit = limits[parent.path] ?: StorageViewModel.PAGE_SIZE
+        val limit = limits[parentPath] ?: StorageViewModel.PAGE_SIZE
         val shown = min(limit, kids.size)
         for (i in 0 until shown) {
             val child = kids[i]
+            val path = "$parentPath/${child.name}"
             val canExpand = child.isDirectory && kidsOf(child).isNotEmpty()
-            val isExpanded = canExpand && child.path in expanded
-            rows += TreeRow.Item(child, depth, isExpanded, canExpand, parent.size)
-            if (isExpanded) add(child, depth + 1)
+            val isExpanded = canExpand && path in expanded
+            rows += TreeRow.Item(child, path, depth, isExpanded, canExpand, parent.size)
+            if (isExpanded) add(child, path, depth + 1)
         }
         if (kids.size > shown) {
             var hiddenBytes = 0L
             for (i in shown until kids.size) hiddenBytes += kids[i].size
-            rows += TreeRow.More(parent, depth, kids.size - shown, hiddenBytes)
+            rows += TreeRow.More(parent, parentPath, depth, kids.size - shown, hiddenBytes)
         }
     }
-    add(root, 0)
+    add(root, root.path, 0)
     return rows
 }
 
@@ -150,7 +164,9 @@ fun StorageListPane(
     val device by vm.device.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val icons = rememberItemIcons()
-    val result = (scan as? ScanState.Done)?.result
+    // The last complete scan stays on screen while a rescan runs.
+    val result = scan.result
+    val rescanning = scan is ScanState.Scanning && result != null
     val foldersOnly = config.twoPane
     val rows = remember(result, vm.expanded, vm.childLimits, foldersOnly) {
         result?.let { buildTreeRows(it.root, vm.expanded, vm.childLimits, foldersOnly) } ?: emptyList()
@@ -158,16 +174,13 @@ fun StorageListPane(
     val subtitle = device?.let {
         stringResource(R.string.used_subtitle, Format.bytes(it.usedBytes), Format.bytes(it.totalBytes))
     }
-    val focusedId = remember(result, vm.focusedPath) {
-        result?.root?.let { root -> vm.focusedPath?.let(root::find)?.id }
-    }
-    // Items before the tree: large title (optional), summary, section header.
-    val treeOffset = (if (config.expandableTitle) 1 else 0) + 2
+    // Items before the tree: large title (optional), summary, error card (if any), section header.
+    val treeOffset = (if (config.expandableTitle) 1 else 0) + (if (scan is ScanState.Failed) 1 else 0) + 2
 
     LaunchedEffect(vm.revealRequest) {
         if (vm.revealRequest == 0) return@LaunchedEffect
         val target = vm.focusedPath ?: return@LaunchedEffect
-        val index = rows.indexOfFirst { it is TreeRow.Item && it.node.path == target }
+        val index = rows.indexOfFirst { it is TreeRow.Item && it.path == target }
         if (index < 0) return@LaunchedEffect
         val key = rows[index].key
         val visible = listState.layoutInfo.visibleItemsInfo.any { it.key == key }
@@ -186,41 +199,53 @@ fun StorageListPane(
             if (!config.twoPane && result != null) {
                 ToolbarIcon(Icons.Outlined.SpaceDashboard, stringResource(R.string.action_overview), onShowOverview)
             }
-            if (vm.hasAccess) {
+            if (rescanning) {
+                ToolbarProgress(stringResource(R.string.refreshing))
+            } else if (vm.hasAccess) {
                 ToolbarIcon(Icons.Outlined.Refresh, stringResource(R.string.action_refresh), vm::rescan)
             }
         },
     ) {
         item(key = "summary", contentType = "summary") {
-            StorageSummaryCard(device, result, appsBytes, scan as? ScanState.Scanning)
+            // Progress shows here only for the first scan; a rescan keeps the legend.
+            StorageSummaryCard(device, result, appsBytes, (scan as? ScanState.Scanning)?.takeIf { result == null })
         }
         if (!vm.hasAccess) {
             item(key = "access", contentType = "access") {
-                AccessCard(
+                NoticeCard(
                     icon = Icons.Outlined.FolderOpen,
                     title = stringResource(R.string.access_files_title),
                     body = stringResource(R.string.access_files_body),
                     button = stringResource(R.string.access_files_button),
-                    onAllow = { Handoff.openSettings(context, Access.allFilesAccessIntents(context)) },
+                    onClick = { Handoff.openSettings(context, Access.allFilesAccessIntents(context)) },
                     modifier = Modifier.padding(top = 16.dp),
                 )
             }
             return@CollapsingPane
         }
-        when (val s = scan) {
-            is ScanState.Done -> treeItems(
-                result = s.result,
+        val failed = scan as? ScanState.Failed
+        if (failed != null) {
+            item(key = "failed", contentType = "access") {
+                NoticeCard(
+                    icon = Icons.Outlined.ErrorOutline,
+                    title = stringResource(R.string.scan_failed_title),
+                    body = failed.message,
+                    button = stringResource(R.string.action_try_again),
+                    onClick = vm::rescan,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+        }
+        if (result != null) {
+            treeItems(
+                result = result,
                 rows = rows,
-                focusedId = focusedId,
+                focusedPath = vm.focusedPath,
                 icons = icons,
                 vm = vm,
                 config = config,
                 onShowOverview = onShowOverview,
             )
-            is ScanState.Failed -> item(key = "failed") {
-                ProgressCard(stringResource(R.string.scan_failed, s.message), null, Modifier.padding(top = 16.dp))
-            }
-            else -> Unit
         }
     }
 }
@@ -228,7 +253,7 @@ fun StorageListPane(
 private fun LazyListScope.treeItems(
     result: ScanResult,
     rows: List<TreeRow>,
-    focusedId: Int?,
+    focusedPath: String?,
     icons: ItemIcons,
     vm: StorageViewModel,
     config: PaneConfig,
@@ -255,9 +280,8 @@ private fun LazyListScope.treeItems(
                     row = row,
                     isFirst = isFirst,
                     isLast = isLast,
-                    focused = config.twoPane && row.node.id == focusedId,
+                    focused = config.twoPane && row.path == focusedPath,
                     icons = icons,
-                    rootPath = vm.rootPath,
                     onClick = { if (config.twoPane) vm.select(row.node) else vm.toggle(row.node) },
                     onChevron = { vm.toggleExpanded(row.node) },
                     onOverview = {
@@ -294,7 +318,6 @@ private fun TreeNodeRow(
     isLast: Boolean,
     focused: Boolean,
     icons: ItemIcons,
-    rootPath: String,
     onClick: () -> Unit,
     onChevron: () -> Unit,
     onOverview: () -> Unit,
@@ -307,6 +330,10 @@ private fun TreeNodeRow(
     val start = rowStart(row.depth)
     val textStart = start + ChevronBox + ItemIconSize + 14.dp
     val chevronRotation by animateFloatAsState(if (row.expanded) 90f else 0f, label = "chevron")
+    val expandState = if (row.canExpand) stringResource(if (row.expanded) R.string.state_expanded else R.string.state_collapsed) else null
+    val chevronLabel = stringResource(if (row.expanded) R.string.action_collapse else R.string.action_expand)
+    val openLabel = if (node.isDirectory) null else stringResource(R.string.action_open)
+    val menuLabel = stringResource(R.string.action_more_options)
 
     Box {
         Row(
@@ -315,12 +342,15 @@ private fun TreeNodeRow(
                 .groupItem(isFirst, isLast, colors.card)
                 .background(if (focused) colors.highlight else Color.Transparent)
                 .combinedClickable(
-                    onClick = { if (node.isDirectory) onClick() else Handoff.openFile(context, node.path) },
+                    onClickLabel = openLabel,
+                    onLongClickLabel = menuLabel,
+                    onClick = { if (node.isDirectory) onClick() else Handoff.openFile(context, row.path) },
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     },
                 )
+                .semantics { if (expandState != null) stateDescription = expandState }
                 .indentGuides(min(row.depth, MaxIndentLevels), colors.divider)
                 .drawBehind {
                     if (!isFirst) {
@@ -341,12 +371,15 @@ private fun TreeNodeRow(
                     .size(ChevronBox)
                     .then(
                         if (row.canExpand) {
-                            Modifier.clickable(
-                                interactionSource = null,
-                                indication = ripple(bounded = false, radius = 20.dp),
-                                role = Role.Button,
-                                onClick = onChevron,
-                            )
+                            Modifier
+                                .clickable(
+                                    interactionSource = null,
+                                    indication = ripple(bounded = false, radius = 20.dp),
+                                    role = Role.Button,
+                                    onClickLabel = chevronLabel,
+                                    onClick = onChevron,
+                                )
+                                .semantics { contentDescription = "$chevronLabel ${node.name}" }
                         } else {
                             Modifier
                         },
@@ -367,7 +400,7 @@ private fun TreeNodeRow(
             ItemContent(node, row.parentSize, icons)
         }
         if (menuOpen) {
-            RowMenu(onDismiss = { menuOpen = false }, node = node, rootPath = rootPath, onOverview = onOverview)
+            RowMenu(onDismiss = { menuOpen = false }, node = node, path = row.path, onOverview = onOverview)
         }
     }
 }
@@ -401,7 +434,7 @@ private fun MoreRow(row: TreeRow.More, isFirst: Boolean, isLast: Boolean, icons:
 private fun RowMenu(
     onDismiss: () -> Unit,
     node: StorageNode,
-    rootPath: String,
+    path: String,
     onOverview: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -427,16 +460,14 @@ private fun RowMenu(
                 entry(stringResource(R.string.action_overview), Icons.Outlined.SpaceDashboard, onOverview)
             }
             entry(stringResource(R.string.action_open_in_files), Icons.Outlined.FolderOpen) {
-                Handoff.openFolder(context, node.path, rootPath)
+                Handoff.openFolder(context, path)
             }
         } else {
             entry(stringResource(R.string.action_open), Icons.AutoMirrored.Outlined.OpenInNew) {
-                Handoff.openFile(context, node.path)
+                Handoff.openFile(context, path)
             }
-            node.parent?.let { parent ->
-                entry(stringResource(R.string.action_show_in_files), Icons.Outlined.FolderOpen) {
-                    Handoff.openFolder(context, parent.path, rootPath)
-                }
+            entry(stringResource(R.string.action_show_in_files), Icons.Outlined.FolderOpen) {
+                Handoff.openFolder(context, path.substringBeforeLast('/'))
             }
         }
     }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,14 +32,40 @@ class ScanResult(
     /** Bytes per [FileCategory] outside the app-owned `Android/` folder. */
     val categoryBytes: LongArray,
     val durationMs: Long,
+    /** [SystemClock.elapsedRealtime] when the scan finished. */
+    val finishedAt: Long,
 )
 
 sealed interface ScanState {
-    data object Idle : ScanState
-    data class Scanning(val files: Long, val bytes: Long, val currentPath: String) : ScanState
-    data class Done(val result: ScanResult) : ScanState
-    data class Failed(val message: String) : ScanState
+    /** The latest complete scan. It stays available while a rescan runs and after one fails. */
+    val result: ScanResult?
+
+    data object Idle : ScanState {
+        override val result: ScanResult? get() = null
+    }
+
+    data class Scanning(
+        val files: Long,
+        val bytes: Long,
+        val currentPath: String,
+        override val result: ScanResult?,
+    ) : ScanState
+
+    data class Done(override val result: ScanResult) : ScanState
+
+    data class Failed(val message: String, override val result: ScanResult?) : ScanState
 }
+
+/** How long a scan or app list is trusted before returning to the app refreshes it. */
+internal const val STALE_AFTER_MS = 10 * 60_000L
+
+/**
+ * Whether data produced at [producedAt] should be refreshed at [now]: something was handed
+ * to another app since ([changedSince], which may have deleted or uninstalled things), or it
+ * is older than [STALE_AFTER_MS]. All times are [SystemClock.elapsedRealtime].
+ */
+internal fun needsRefresh(producedAt: Long, changedSince: Long, now: Long): Boolean =
+    changedSince > producedAt || now - producedAt > STALE_AFTER_MS
 
 /** Owns the storage scan so it survives configuration changes such as folding. */
 class StorageRepository(private val context: Context) {
@@ -51,6 +78,10 @@ class StorageRepository(private val context: Context) {
 
     private var job: Job? = null
 
+    /** Only the newest scan may publish; a cancelled one can still be finishing a write. */
+    private val lock = Any()
+    private var generation = 0
+
     val rootPath: String = Environment.getExternalStorageDirectory().absolutePath
 
     /** Starts a scan unless one is running or finished, or always when [force] is set. */
@@ -58,33 +89,52 @@ class StorageRepository(private val context: Context) {
         refreshDevice()
         val current = _state.value
         if (!force && (current is ScanState.Scanning || current is ScanState.Done)) return
+        val previous = current.result
+        val gen = synchronized(lock) { ++generation }
         job?.cancel()
         job = scope.launch {
             val scanner = StorageScanner(rootPath)
             val started = SystemClock.elapsedRealtime()
             val ticker = launch {
                 while (isActive) {
-                    _state.value = ScanState.Scanning(
-                        files = scanner.filesScanned.get(),
-                        bytes = scanner.bytesScanned.get(),
-                        currentPath = scanner.currentPath,
+                    publish(
+                        gen,
+                        ScanState.Scanning(
+                            files = scanner.filesScanned.get(),
+                            bytes = scanner.bytesScanned.get(),
+                            currentPath = scanner.currentPath,
+                            result = previous,
+                        ),
                     )
                     delay(100)
                 }
             }
-            try {
+            val outcome = try {
                 val root = scanner.scan()
-                ticker.cancel()
                 val categories = LongArray(FileCategory.entries.size) { scanner.categoryBytes[it] }
-                _state.value = ScanState.Done(
-                    ScanResult(root, categories, SystemClock.elapsedRealtime() - started),
-                )
+                val finished = SystemClock.elapsedRealtime()
+                ScanState.Done(ScanResult(root, categories, finished - started, finished))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                ticker.cancel()
-                _state.value = ScanState.Failed(e.message ?: e.javaClass.simpleName)
+                ScanState.Failed(e.message ?: e.javaClass.simpleName, previous)
             }
+            // Wait for the ticker to stop, or its last progress update could land after the result.
+            ticker.cancelAndJoin()
+            publish(gen, outcome)
+        }
+    }
+
+    /**
+     * Called when the app comes back to the foreground: scans if there is no result yet, and
+     * rescans in the background (keeping the old result on screen) when it may be out of date.
+     */
+    fun refresh(changedSince: Long) {
+        val current = _state.value
+        if (current is ScanState.Done && needsRefresh(current.result.finishedAt, changedSince, SystemClock.elapsedRealtime())) {
+            scan(force = true)
+        } else {
+            scan()
         }
     }
 
@@ -99,6 +149,12 @@ class StorageRepository(private val context: Context) {
                     )
                 }.getOrNull()
             }
+        }
+    }
+
+    private fun publish(gen: Int, state: ScanState) {
+        synchronized(lock) {
+            if (gen == generation) _state.value = state
         }
     }
 }

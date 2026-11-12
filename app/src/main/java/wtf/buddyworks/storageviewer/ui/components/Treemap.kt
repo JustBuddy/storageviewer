@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -170,17 +171,21 @@ fun Treemap(
             val wDp = with(density) { w.toDp() }
             val hDp = with(density) { h.toDp() }
             val radius = min(12f, min(wDp.value, hDp.value) / 4f).dp
-            Tile(
-                item = item,
-                modifier = Modifier
-                    .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
-                    .size(wDp, hDp)
-                    .clip(RoundedCornerShape(radius))
-                    .then(if (item.clickable) Modifier.clickable { onClick(item) } else Modifier)
-                    .semantics { contentDescription = "${item.label}, ${item.detail}" },
-                widthDp = wDp.value,
-                heightDp = hDp.value,
-            )
+            // Keyed so a tile's state (such as a loaded icon) never carries over to another item
+            // when the list changes, for example after a filter or search.
+            key(item.key) {
+                Tile(
+                    item = item,
+                    modifier = Modifier
+                        .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+                        .size(wDp, hDp)
+                        .clip(RoundedCornerShape(radius))
+                        .then(if (item.clickable) Modifier.clickable { onClick(item) } else Modifier)
+                        .semantics { contentDescription = "${item.label}, ${item.detail}" },
+                    widthDp = wDp.value,
+                    heightDp = hDp.value,
+                )
+            }
         }
     }
 }
@@ -241,7 +246,7 @@ private fun Tile(item: TreemapItem, modifier: Modifier, widthDp: Float, heightDp
         if (showLabel) {
             Column(Modifier.padding(horizontal = 9.dp, vertical = if (showDetail) 7.dp else 5.dp)) {
                 if (showIcon) {
-                    item.icon?.invoke()
+                    item.icon.invoke()
                     Spacer(Modifier.size(6.dp))
                 }
                 Row {

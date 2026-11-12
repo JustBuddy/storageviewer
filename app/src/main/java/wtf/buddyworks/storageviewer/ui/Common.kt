@@ -37,14 +37,17 @@ data class PaneConfig(
 /** Horizontal margin of cards inside a list pane. */
 val CardMargin = 12.dp
 
-/** Explains a special access and links to the Settings page that grants it. */
+/**
+ * Explains something the user can act on, with one button: a special access and the Settings
+ * page that grants it, or a failed load and a retry.
+ */
 @Composable
-fun AccessCard(
+fun NoticeCard(
     icon: ImageVector,
     title: String,
     body: String,
     button: String,
-    onAllow: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     GroupCard(modifier.padding(horizontal = CardMargin), contentPadding = 22.dp) {
@@ -55,7 +58,7 @@ fun AccessCard(
         Text(body, style = OneUi.type.itemSubtitle, color = OneUi.colors.textSecondary)
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            PillButton(button, onAllow)
+            PillButton(button, onClick)
         }
     }
 }

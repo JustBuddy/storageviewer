@@ -65,8 +65,10 @@ private fun lightColors(accent: Color, onAccent: Color) = OneUiColors(
     background = Color(0xFFF0F0F0),
     card = Color(0xFFFCFCFC),
     textPrimary = Color(0xFF010101),
-    textSecondary = Color(0xFF7A7A7A),
-    textSection = Color(0xFF909090),
+    // One UI's own greys (#7A7A7A, #909090) are too faint for small text, so these are darkened
+    // to reach WCAG AA (4.5:1) on the background, cards, highlights and pills.
+    textSecondary = Color(0xFF666666),
+    textSection = Color(0xFF6D6D6D),
     divider = Color(0xFFE4E4E7),
     selection = Color(0xFFDDDDDD),
     highlight = Color(0xFFEDEDED),
