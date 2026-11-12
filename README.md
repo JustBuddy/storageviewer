@@ -25,12 +25,15 @@ StorageViewer is a read-only storage and app-size inspector for Android. It's st
 
 ## ✨ Features
 
-- **Storage at a glance.** One bar shows what is using the device: apps, images, videos, documents, audio, archives, system files and free space.
+- **Storage at a glance.** One bar shows what is using the device: apps, images, videos, documents, audio, archives, system files and free space. Tap a file type to list every file of that type, largest first.
+- **Worth checking.** Under the summary, one card points to space you may not need: duplicate files, large files untouched for over a year, apps you haven't used in 90 days, and folders left behind by uninstalled apps. Each one opens a list, and you decide what to remove in My Files or App info.
 - **A folder tree sorted by size.** The biggest folders are always on top and each one has a share bar, so you can follow the space down to the files that use it.
 - **Treemaps.** Any folder can be shown as tiles sized by bytes and coloured by file type. Tap a folder tile to go into it, or tap a file to open it.
 - **Thumbnails.** Files show a preview where they have one: photos, video frames, album art, the first page of a PDF and the icon inside an APK.
-- **Apps by size.** Every installed app, largest first, with its app, data and cache sizes. You can filter by downloaded, all or system apps, and search.
-- **Stays current.** When you come back from My Files, a viewer or App info, StorageViewer rescans in the background, so deleted files and uninstalled apps drop out. Results older than 10 minutes are refreshed the same way.
+- **Folders know their app.** Folders such as `Android/media/com.whatsapp`, `Telegram` or `DCIM/Camera` show the icon and name of the app they belong to. Folders of apps that are no longer installed are marked.
+- **Search.** Find any file or folder by name across the whole scan.
+- **Apps by size.** Every installed app, largest first, with its app, data and cache sizes. You can filter by downloaded, all, system or unused apps, and search. Unused apps show when you last used them. Keyboards, launchers and other apps that work without being opened never count as unused.
+- **Stays current.** When you come back from My Files, a viewer or App info, StorageViewer rescans in the background, so deleted files and uninstalled apps drop out. Only the folder you had open and folders whose contents changed are read again, so this is quick. Results older than 10 minutes are rescanned in full.
 - **Made for foldables.** The cover screen gets one pane and a large One UI title. Unfolded, the tree and the overview sit on either side of the hinge. In tabletop mode the overview moves above the fold. Folding or unfolding keeps your place.
 - **Light and dark.** The app follows the system theme and takes its accent colour from your colour palette.
 - **Strictly read-only.** StorageViewer never changes anything on your phone ([more below](#-read-only-by-design)).
@@ -76,7 +79,7 @@ StorageViewer never writes, moves or deletes anything. Every tap is passed to th
 | File | Its default viewer, with read-only access. APKs open in My Files, which can install them. |
 | App | Android's App info page |
 
-Under the hood, the scan only calls `readdir` and `lstat`. Thumbnails open files read-only and are kept in memory only. Nothing is cached on disk, including MediaStore's thumbnail cache. The `FileProvider` that hands files to viewers refuses anything except read access.
+Under the hood, the scan only calls `readdir` and `lstat`. Thumbnails and the duplicate check open files read-only, and their results are kept in memory only. Nothing is cached on disk, including MediaStore's thumbnail cache. The `FileProvider` that hands files to viewers refuses anything except read access.
 
 Android has no read-only version of "All files access", so the app holds the standard permission. No code path uses it to write.
 
@@ -85,10 +88,10 @@ Android has no read-only version of "All files access", so the app holds the sta
 | Permission | What it's for |
 |---|---|
 | All files access (`MANAGE_EXTERNAL_STORAGE`) | Measuring folder sizes in shared storage |
-| Usage access (`PACKAGE_USAGE_STATS`) | Reading each app's data and cache size |
+| Usage access (`PACKAGE_USAGE_STATS`) | Reading each app's data and cache size, and when you last used it |
 | `QUERY_ALL_PACKAGES` | Listing every installed app |
 
-Both special accesses are requested in the app and granted in Settings. Without usage access, apps show their install size only. No app can read `Android/data` or `Android/obb`, so their contents are counted in each app's size instead.
+Both special accesses are requested in the app and granted in Settings. Without usage access, apps show their install size only and none count as unused. No app can read `Android/data` or `Android/obb`, so their contents are counted in each app's size instead.
 
 ## 🛠️ Build from source
 
