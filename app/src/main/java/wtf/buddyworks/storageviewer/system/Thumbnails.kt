@@ -13,6 +13,7 @@ import android.util.LruCache
 import android.util.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import kotlin.math.min
@@ -98,7 +99,7 @@ object Thumbnails {
                 renderer.openPage(0).use { page ->
                     val width = px * 2
                     val height = (page.height * width.toFloat() / page.width).roundToInt().coerceIn(1, width * 4)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val bitmap = createBitmap(width, height)
                     bitmap.eraseColor(Color.WHITE)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     return square(bitmap, px, alignTop = true)

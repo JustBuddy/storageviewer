@@ -48,7 +48,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug").also {
+                logger.warn("w: No release key (keystore.properties or SIGNING_* variables): release builds are signed with the debug key.")
+            }
         }
     }
 
@@ -67,6 +69,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.window)
 
     implementation(platform(libs.compose.bom))

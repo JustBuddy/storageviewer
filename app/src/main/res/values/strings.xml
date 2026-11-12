@@ -25,7 +25,9 @@
 
     <string name="scanning">Scanning…</string>
     <string name="scanning_progress">%1$s files · %2$s</string>
-    <string name="scan_failed">Scan failed: %1$s</string>
+    <string name="scan_failed_title">Scan failed</string>
+    <string name="apps_failed_title">Couldn\'t load apps</string>
+    <string name="refreshing">Refreshing</string>
     <string name="tree_summary">%1$s · %2$s</string>
 
     <plurals name="items">
@@ -75,6 +77,12 @@
     <string name="action_open">Open</string>
     <string name="action_open_in_files">Open in My Files</string>
     <string name="action_show_in_files">Show in My Files</string>
+    <string name="action_try_again">Try again</string>
+    <string name="action_expand">Expand</string>
+    <string name="action_collapse">Collapse</string>
+    <string name="action_more_options">More options</string>
+    <string name="state_expanded">Expanded</string>
+    <string name="state_collapsed">Collapsed</string>
 
     <string name="overview_title">Overview</string>
     <string name="largest_files">Largest files, including subfolders</string>
@@ -99,4 +107,5 @@
     <string name="error_no_file_manager">No file manager found</string>
     <string name="error_no_app_info">App info isn\'t available</string>
     <string name="error_no_settings">This settings page isn\'t available</string>
+    <string name="apk_in_files">Showing the APK in My Files, where it can be installed</string>
 </resources>

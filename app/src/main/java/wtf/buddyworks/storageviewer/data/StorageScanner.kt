@@ -10,7 +10,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicLongArray
 import kotlin.coroutines.coroutineContext
@@ -23,7 +22,6 @@ import kotlin.coroutines.coroutineContext
  * shared storage sits behind a FUSE daemon, where stat latency dominates.
  */
 class StorageScanner(private val rootPath: String) {
-    private val ids = AtomicInteger()
     val filesScanned = AtomicLong()
     val bytesScanned = AtomicLong()
 
@@ -40,7 +38,7 @@ class StorageScanner(private val rootPath: String) {
     private val dispatcher = Dispatchers.IO.limitedParallelism(PARALLELISM)
 
     suspend fun scan(): StorageNode {
-        val root = StorageNode(ids.getAndIncrement(), rootPath, null, true, null, mtimeOf(rootPath))
+        val root = StorageNode(rootPath, null, true, null, mtimeOf(rootPath))
         withContext(dispatcher) { scanDirectory(root, rootPath, inAndroidFolder = false) }
         return root
     }
@@ -66,13 +64,13 @@ class StorageScanner(private val rootPath: String) {
             val mtime = stat.st_mtime * 1000L
             when {
                 OsConstants.S_ISDIR(stat.st_mode) -> {
-                    val folder = StorageNode(ids.getAndIncrement(), name, node, true, null, mtime)
+                    val folder = StorageNode(name, node, true, null, mtime)
                     kids += folder
                     folders += folder
                 }
                 OsConstants.S_ISREG(stat.st_mode) -> {
                     val category = FileCategory.of(name)
-                    val file = StorageNode(ids.getAndIncrement(), name, node, false, category, mtime)
+                    val file = StorageNode(name, node, false, category, mtime)
                     file.size = stat.st_size
                     file.fileCount = 1
                     kids += file
@@ -99,27 +97,7 @@ class StorageScanner(private val rootPath: String) {
             }
         }
 
-        var size = 0L
-        var files = 0
-        var subfolders = 0
-        val categories = LongArray(FileCategory.entries.size)
-        for (kid in kids) {
-            size += kid.size
-            files += kid.fileCount
-            if (kid.isDirectory) {
-                subfolders += 1 + kid.folderCount
-                kid.categoryBytes?.let { for (i in it.indices) categories[i] += it[i] }
-            } else {
-                categories[kid.category!!.ordinal] += kid.size
-            }
-        }
-        node.categoryBytes = categories
-        node.size = size
-        node.fileCount = files
-        node.folderCount = subfolders
-        kids.sortWith(compareByDescending<StorageNode> { it.size }.thenBy { it.name.lowercase() })
-        node.children = kids
-        node.subfolders = kids.filter { it.isDirectory }
+        node.complete(kids)
     }
 
     private fun mtimeOf(path: String): Long =

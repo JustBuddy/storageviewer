@@ -11,8 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,10 +45,12 @@ fun FileThumbnail(node: StorageNode, size: Dp, modifier: Modifier = Modifier, fa
     val context = LocalContext.current
     val px = with(LocalDensity.current) { DecodeSize.roundToPx() }
     val key = remember(node, px) { Thumbnails.key(node, px) }
-    val thumb by produceState(Thumbnails.peek(key), key) {
-        if (value == null) value = Thumbnails.load(context.applicationContext, node.path, kind, px, key)
+    // State keyed by file: a reused slot must not keep showing the previous file's preview.
+    val thumb = remember(key) { mutableStateOf(Thumbnails.peek(key)) }
+    LaunchedEffect(thumb) {
+        if (thumb.value == null) thumb.value = Thumbnails.load(context.applicationContext, node.path, kind, px, key)
     }
-    val bitmap = thumb
+    val bitmap = thumb.value
     if (bitmap == null) {
         fallback()
         return

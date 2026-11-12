@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -41,10 +42,12 @@ private object IconCache {
 fun AppIcon(packageName: String, size: Dp, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val icon by produceState(IconCache.peek("$packageName@$px"), packageName, px) {
-        if (value == null) value = withContext(Dispatchers.IO) { IconCache.load(context, packageName, px) }
+    // State keyed by app: a reused slot must not keep showing the previous app's icon.
+    val icon = remember(packageName, px) { mutableStateOf(IconCache.peek("$packageName@$px")) }
+    LaunchedEffect(icon) {
+        if (icon.value == null) icon.value = withContext(Dispatchers.IO) { IconCache.load(context, packageName, px) }
     }
-    val current = icon
+    val current = icon.value
     if (current != null) {
         Image(current, contentDescription = null, modifier = modifier.size(size))
     } else {

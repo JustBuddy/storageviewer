@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -103,8 +104,8 @@ private val OuterMargin = 12.dp
 @Composable
 fun AppRoot() {
     val app = LocalContext.current.storageViewerApp
-    val storageVm = viewModel { StorageViewModel(app) }
-    val appsVm = viewModel { AppsViewModel(app) }
+    val storageVm = viewModel { StorageViewModel(app, createSavedStateHandle()) }
+    val appsVm = viewModel { AppsViewModel(app, createSavedStateHandle()) }
     var tab by rememberSaveable { mutableStateOf(Tab.Storage) }
     var overviewOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -120,7 +121,8 @@ fun AppRoot() {
     val stateHolder = rememberSaveableStateHolder()
 
     val appsState by appsVm.state.collectAsStateWithLifecycle()
-    val appsBytes = (appsState as? AppsState.Loaded)?.takeIf { it.withStats }?.apps?.sumOf { it.totalBytes }
+    val appsLoaded = appsState.loaded
+    val appsBytes = remember(appsLoaded) { appsLoaded?.takeIf { it.withStats }?.apps?.sumOf { it.totalBytes } }
 
     val navItems = listOf(
         NavItem(stringResource(R.string.nav_storage), Icons.Outlined.PieChart, Icons.Filled.PieChart),
@@ -137,6 +139,9 @@ fun AppRoot() {
         val railWidth = if (useRail) RailWidth else 0.dp
         val panes = computePanes(maxWidth, maxHeight, railWidth, fold, density)
         val single = panes is Panes.Single
+        // Without a rail, layouts with the list at the bottom get the floating tab bar.
+        val tabBar = !useRail && panes !is Panes.SideBySide
+        val listBottom = bottomInset + if (tabBar) FloatingTabBarHeight + 28.dp else 16.dp
 
         @Composable
         fun listPane(config: PaneConfig, modifier: Modifier) {
@@ -175,20 +180,10 @@ fun AppRoot() {
                         PaneConfig(
                             expandableTitle = tall,
                             topInset = topInset,
-                            bottomPadding = bottomInset + if (useRail) 16.dp else FloatingTabBarHeight + 28.dp,
+                            bottomPadding = listBottom,
                             twoPane = false,
                         ),
                         Modifier.weight(1f),
-                    )
-                }
-                if (!useRail) {
-                    FloatingTabBar(
-                        navItems,
-                        tab.ordinal,
-                        { tab = Tab.entries[it] },
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = bottomInset + 14.dp),
                     )
                 }
             }
@@ -225,11 +220,22 @@ fun AppRoot() {
                     ) { overview(PaddingValues(top = 16.dp, bottom = 16.dp)) }
                     Spacer(Modifier.height(panes.listTop - panes.overviewBottom + PaneGap * 2))
                     listPane(
-                        PaneConfig(expandableTitle = false, topInset = 0.dp, bottomPadding = bottomInset + 16.dp, twoPane = true),
+                        PaneConfig(expandableTitle = false, topInset = 0.dp, bottomPadding = listBottom, twoPane = true),
                         Modifier.weight(1f),
                     )
                 }
             }
+        }
+
+        if (tabBar) {
+            FloatingTabBar(
+                navItems,
+                tab.ordinal,
+                { tab = Tab.entries[it] },
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomInset + 14.dp),
+            )
         }
 
         // Cover screen: the overview opens as its own screen.
@@ -257,9 +263,10 @@ fun AppRoot() {
                 ) { overview(PaddingValues(top = 16.dp, bottom = 16.dp)) }
             }
         }
-    }
 
-    BackHandler(enabled = overviewOpen) { overviewOpen = false }
+        // Only while the overview screen is showing; unfolded, Back belongs to the system.
+        BackHandler(enabled = single && overviewOpen) { overviewOpen = false }
+    }
 }
 
 /** The big rounded card One UI uses for a detail pane. */
@@ -275,10 +282,14 @@ private fun OverviewCard(modifier: Modifier, content: @Composable () -> Unit) {
 @Composable
 private fun StorageOverviewPane(vm: StorageViewModel, contentPadding: PaddingValues) {
     val scan by vm.scanState.collectAsStateWithLifecycle()
-    val root = (scan as? ScanState.Done)?.result?.root
+    val root = scan.result?.root
     val focused = remember(root, vm.focusedPath) { root?.let { r -> vm.focusedPath?.let(r::find) ?: r } }
     if (focused == null) {
-        val message = if (!vm.hasAccess) R.string.access_files_title else R.string.scanning
+        val message = when {
+            !vm.hasAccess -> R.string.access_files_title
+            scan is ScanState.Failed -> R.string.scan_failed_title
+            else -> R.string.scanning
+        }
         PanePlaceholder(stringResource(message))
     } else {
         StorageOverview(
@@ -294,9 +305,14 @@ private fun StorageOverviewPane(vm: StorageViewModel, contentPadding: PaddingVal
 @Composable
 private fun AppsOverviewPane(vm: AppsViewModel, contentPadding: PaddingValues) {
     val state by vm.state.collectAsStateWithLifecycle()
-    val loaded = state as? AppsState.Loaded
+    val loaded = state.loaded
     if (loaded == null) {
-        PanePlaceholder(stringResource(R.string.loading_apps, "…", "…"))
+        val message = if (state is AppsState.Failed) {
+            stringResource(R.string.apps_failed_title)
+        } else {
+            stringResource(R.string.loading_apps, "…", "…")
+        }
+        PanePlaceholder(message)
     } else {
         val visible = remember(loaded.apps, vm.filter, vm.query) { vm.visible(loaded.apps) }
         AppsOverview(visible, Modifier.fillMaxSize(), contentPadding)

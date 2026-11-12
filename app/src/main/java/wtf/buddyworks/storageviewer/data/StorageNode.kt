@@ -7,7 +7,6 @@ import java.util.PriorityQueue
  * never changed after the scan result is published.
  */
 class StorageNode internal constructor(
-    val id: Int,
     /** File name, or the absolute path for the root. */
     val name: String,
     val parent: StorageNode?,
@@ -43,8 +42,6 @@ class StorageNode internal constructor(
     var restricted: Boolean = false
         internal set
 
-    val depth: Int = if (parent == null) 0 else parent.depth + 1
-
     val isRoot: Boolean get() = parent == null
 
     val itemCount: Int get() = children.size
@@ -62,6 +59,34 @@ class StorageNode internal constructor(
             return if (best < 0) null else FileCategory.entries[best]
         }
 
+    /**
+     * Makes this folder final once all of [kids] are complete: adds up their sizes, counts and
+     * file types, and stores them largest first.
+     */
+    internal fun complete(kids: MutableList<StorageNode>) {
+        var size = 0L
+        var files = 0
+        var folders = 0
+        val categories = LongArray(FileCategory.entries.size)
+        for (kid in kids) {
+            size += kid.size
+            files += kid.fileCount
+            if (kid.isDirectory) {
+                folders += 1 + kid.folderCount
+                kid.categoryBytes?.let { for (i in it.indices) categories[i] += it[i] }
+            } else {
+                categories[(kid.category ?: FileCategory.Other).ordinal] += kid.size
+            }
+        }
+        categoryBytes = categories
+        this.size = size
+        fileCount = files
+        folderCount = folders
+        kids.sortWith(compareByDescending<StorageNode> { it.size }.thenBy { it.name.lowercase() })
+        children = kids
+        subfolders = kids.filter { it.isDirectory }
+    }
+
     /** This node and its parents, starting at the root. */
     fun lineage(): List<StorageNode> = generateSequence(this) { it.parent }.toList().asReversed()
 
@@ -78,6 +103,7 @@ class StorageNode internal constructor(
 
     /** The [limit] largest files anywhere below this node, largest first. */
     fun largestFiles(limit: Int): List<StorageNode> {
+        if (limit <= 0) return emptyList()
         if (!isDirectory) return listOf(this)
         val heap = PriorityQueue<StorageNode>(limit + 1, compareBy { it.size })
         val stack = ArrayDeque<StorageNode>()
@@ -89,7 +115,7 @@ class StorageNode internal constructor(
                     stack.addLast(child)
                 } else if (heap.size < limit) {
                     heap.add(child)
-                } else if (child.size > heap.peek()!!.size) {
+                } else if (child.size > heap.peek()!!.size) { // Full heap (limit > 0), so never empty.
                     heap.poll()
                     heap.add(child)
                 }

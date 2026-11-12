@@ -4,16 +4,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.SavedStateHandleSaveableApi
+import androidx.lifecycle.viewmodel.compose.saveable
 import wtf.buddyworks.storageviewer.StorageViewerApp
 import wtf.buddyworks.storageviewer.data.Access
 import wtf.buddyworks.storageviewer.data.DeviceStorage
 import wtf.buddyworks.storageviewer.data.ScanState
 import wtf.buddyworks.storageviewer.data.StorageNode
+import wtf.buddyworks.storageviewer.system.Handoff
 import kotlinx.coroutines.flow.StateFlow
 
-/** Tree UI state. Folders are tracked by path so expansions survive a rescan. */
-class StorageViewModel(app: StorageViewerApp) : ViewModel() {
+/**
+ * Tree UI state. Folders are tracked by path so expansions survive a rescan, and the open
+ * folders and focus are saved so they also survive Android ending the process.
+ */
+@OptIn(SavedStateHandleSaveableApi::class)
+class StorageViewModel(app: StorageViewerApp, saved: SavedStateHandle) : ViewModel() {
     private val repository = app.storage
     val scanState: StateFlow<ScanState> = repository.state
     val device: StateFlow<DeviceStorage?> = repository.device
@@ -21,9 +29,9 @@ class StorageViewModel(app: StorageViewerApp) : ViewModel() {
 
     var hasAccess by mutableStateOf(Access.hasAllFilesAccess())
         private set
-    var expanded by mutableStateOf<Set<String>>(emptySet())
+    var expanded by saved.saveable { mutableStateOf<Set<String>>(emptySet()) }
         private set
-    var focusedPath by mutableStateOf<String?>(null)
+    var focusedPath by saved.saveable { mutableStateOf<String?>(null) }
         private set
     var childLimits by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
@@ -32,9 +40,10 @@ class StorageViewModel(app: StorageViewerApp) : ViewModel() {
     var revealRequest by mutableIntStateOf(0)
         private set
 
+    /** Scans on first start, and again on return when files may have changed meanwhile. */
     fun onResume() {
         hasAccess = Access.hasAllFilesAccess()
-        if (hasAccess) repository.scan() else repository.refreshDevice()
+        if (hasAccess) repository.refresh(changedSince = Handoff.lastHandoffAt) else repository.refreshDevice()
     }
 
     fun rescan() {

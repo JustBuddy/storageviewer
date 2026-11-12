@@ -35,7 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -113,11 +113,15 @@ fun StorageOverview(
     val rootName = stringResource(R.string.internal_storage)
     val title = if (node.isRoot) rootName else node.name
     val listState = rememberLazyListState()
-    LaunchedEffect(node.id) { listState.scrollToItem(0) }
-    var shown by remember(node.id) { mutableIntStateOf(ContentsPage) }
+    // Keyed by path rather than node: a rescan replaces every node but should not reset the pane.
+    val path = remember(node) { node.path }
+    LaunchedEffect(path) { listState.scrollToItem(0) }
+    var shown by remember(path) { mutableIntStateOf(ContentsPage) }
     val contents = node.children
-    val largest by produceState(emptyList(), node) {
-        value = if (node.folderCount > 0) withContext(Dispatchers.Default) { node.largestFiles(8) } else emptyList()
+    // Another folder starts empty; a rescan of the same folder keeps the list until the new one is ready.
+    var largest by remember(path) { mutableStateOf(emptyList<StorageNode>()) }
+    LaunchedEffect(node) {
+        largest = if (node.folderCount > 0) withContext(Dispatchers.Default) { node.largestFiles(8) } else emptyList()
     }
     val openItem: (StorageNode) -> Unit = { item ->
         if (item.isDirectory) onFocus(item) else Handoff.openFile(context, item.path)
@@ -150,7 +154,7 @@ fun StorageOverview(
                     ToolbarIcon(
                         Icons.Outlined.FolderOpen,
                         stringResource(R.string.action_open_in_files),
-                        onClick = { Handoff.openFolder(context, node.path, rootPath) },
+                        onClick = { Handoff.openFolder(context, path) },
                     )
                 }
                 // For the whole storage the summary card already shows the type split.
@@ -189,7 +193,7 @@ fun StorageOverview(
                     )
                 }
                 val visible = contents.size.coerceAtMost(shown)
-                items(visible, key = { contents[it].id }, contentType = { "item" }) { index ->
+                items(visible, key = { "item:" + contents[it].name }, contentType = { "item" }) { index ->
                     val item = contents[index]
                     ContentRow(item, node.size, icons, isFirst = index == 0) { openItem(item) }
                 }
@@ -214,7 +218,7 @@ fun StorageOverview(
                 item(key = "largest-title", contentType = "section") {
                     OverviewSectionTitle(stringResource(R.string.largest_files))
                 }
-                items(largest.size, key = { "largest:" + largest[it].id }, contentType = { "file" }) { index ->
+                items(largest.size, key = { "largest:" + largest[it].path }, contentType = { "file" }) { index ->
                     val file = largest[index]
                     FileRow(file, rootPath, rootName, icons, isFirst = index == 0) { Handoff.openFile(context, file.path) }
                 }
@@ -376,11 +380,12 @@ private fun FileTypeStrip(bytes: LongArray, total: Long) {
     val colors = OneUi.colors
     // Declaration order, so neighbouring bar segments keep their validated colour contrast.
     val present = FileCategory.entries.filter { bytes[it.ordinal] > 0 }
+    val description = present.map { "${categoryLabel(it)} ${Format.bytes(bytes[it.ordinal])}" }.joinToString()
     Column(Modifier.padding(horizontal = 24.dp)) {
         SegmentedBar(
             parts = FileCategory.entries.map { BarPart(it, bytes[it.ordinal], categoryColor(it)) },
             total = total,
-            description = present.joinToString { "${it.name} ${Format.bytes(bytes[it.ordinal])}" },
+            description = description,
             height = 8.dp,
         )
         Spacer(Modifier.height(10.dp))
@@ -407,7 +412,7 @@ private fun Breadcrumbs(node: StorageNode, rootName: String, onFocus: (StorageNo
     val colors = OneUi.colors
     val scroll = rememberScrollState()
     val lineage = node.lineage()
-    LaunchedEffect(node.id) { scroll.scrollTo(scroll.maxValue) }
+    LaunchedEffect(node) { scroll.scrollTo(scroll.maxValue) }
     Row(
         Modifier
             .padding(horizontal = 16.dp)

@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SpaceDashboard
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -61,14 +62,15 @@ import wtf.buddyworks.storageviewer.data.AppEntry
 import wtf.buddyworks.storageviewer.data.AppsState
 import wtf.buddyworks.storageviewer.data.Format
 import wtf.buddyworks.storageviewer.system.Handoff
-import wtf.buddyworks.storageviewer.ui.AccessCard
 import wtf.buddyworks.storageviewer.ui.CardMargin
+import wtf.buddyworks.storageviewer.ui.NoticeCard
 import wtf.buddyworks.storageviewer.ui.PaneConfig
 import wtf.buddyworks.storageviewer.ui.ProgressCard
 import wtf.buddyworks.storageviewer.ui.components.BarPart
 import wtf.buddyworks.storageviewer.ui.components.CollapsingPane
 import wtf.buddyworks.storageviewer.ui.components.SegmentedBar
 import wtf.buddyworks.storageviewer.ui.components.ToolbarIcon
+import wtf.buddyworks.storageviewer.ui.components.ToolbarProgress
 import wtf.buddyworks.storageviewer.ui.components.groupItem
 import wtf.buddyworks.storageviewer.ui.theme.OneUi
 import wtf.buddyworks.storageviewer.ui.tint
@@ -82,7 +84,9 @@ fun AppsListPane(
 ) {
     val context = LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
-    val loaded = state as? AppsState.Loaded
+    // The last complete list stays on screen while a reload runs.
+    val loaded = state.loaded
+    val reloading = state is AppsState.Loading && loaded != null
     val all = loaded?.apps.orEmpty()
     val visible = remember(all, vm.filter, vm.query) { vm.visible(all) }
     val largest = visible.maxOfOrNull { it.totalBytes }?.coerceAtLeast(1L) ?: 1L
@@ -110,7 +114,11 @@ fun AppsListPane(
             if (!config.twoPane && loaded != null) {
                 ToolbarIcon(Icons.Outlined.SpaceDashboard, stringResource(R.string.action_overview), onShowOverview)
             }
-            ToolbarIcon(Icons.Outlined.Refresh, stringResource(R.string.action_refresh), vm::refresh)
+            if (reloading) {
+                ToolbarProgress(stringResource(R.string.refreshing))
+            } else {
+                ToolbarIcon(Icons.Outlined.Refresh, stringResource(R.string.action_refresh), vm::refresh)
+            }
         },
     ) {
         if (vm.searching) {
@@ -123,18 +131,30 @@ fun AppsListPane(
         }
         if (!vm.hasUsageAccess) {
             item(key = "usage-access", contentType = "access") {
-                AccessCard(
+                NoticeCard(
                     icon = Icons.Outlined.QueryStats,
                     title = stringResource(R.string.access_usage_title),
                     body = stringResource(R.string.access_usage_body),
                     button = stringResource(R.string.access_usage_button),
-                    onAllow = { Handoff.openSettings(context, Access.usageAccessIntents(context)) },
+                    onClick = { Handoff.openSettings(context, Access.usageAccessIntents(context)) },
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
             }
         }
         val s = state
-        if (s is AppsState.Loading || s is AppsState.Idle) {
+        if (s is AppsState.Failed) {
+            item(key = "failed", contentType = "access") {
+                NoticeCard(
+                    icon = Icons.Outlined.ErrorOutline,
+                    title = stringResource(R.string.apps_failed_title),
+                    body = s.message,
+                    button = stringResource(R.string.action_try_again),
+                    onClick = vm::refresh,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
+        }
+        if ((s is AppsState.Loading || s is AppsState.Idle) && loaded == null) {
             item(key = "loading", contentType = "progress") {
                 val loading = s as? AppsState.Loading
                 ProgressCard(
