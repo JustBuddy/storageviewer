@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.log2
 import kotlin.math.pow
@@ -59,13 +60,28 @@ sealed interface ScanState {
 /** How long a scan or app list is trusted before returning to the app refreshes it. */
 internal const val STALE_AFTER_MS = 10 * 60_000L
 
+internal enum class Refresh {
+    None,
+
+    /** Something was handed to another app, which may have deleted or uninstalled things. */
+    Changed,
+
+    /** Older than [STALE_AFTER_MS]: anything may have changed. */
+    Full,
+}
+
 /**
- * Whether data produced at [producedAt] should be refreshed at [now]: something was handed
- * to another app since ([changedSince], which may have deleted or uninstalled things), or it
- * is older than [STALE_AFTER_MS]. All times are [SystemClock.elapsedRealtime].
+ * How data produced at [producedAt] should be refreshed at [now], given the last handoff to
+ * another app at [changedSince]. All times are [SystemClock.elapsedRealtime].
  */
+internal fun refreshNeeded(producedAt: Long, changedSince: Long, now: Long): Refresh = when {
+    now - producedAt > STALE_AFTER_MS -> Refresh.Full
+    changedSince > producedAt -> Refresh.Changed
+    else -> Refresh.None
+}
+
 internal fun needsRefresh(producedAt: Long, changedSince: Long, now: Long): Boolean =
-    changedSince > producedAt || now - producedAt > STALE_AFTER_MS
+    refreshNeeded(producedAt, changedSince, now) != Refresh.None
 
 /** Owns the storage scan so it survives configuration changes such as folding. */
 class StorageRepository(private val context: Context) {
@@ -76,20 +92,52 @@ class StorageRepository(private val context: Context) {
     private val _device = MutableStateFlow<DeviceStorage?>(null)
     val device: StateFlow<DeviceStorage?> = _device.asStateFlow()
 
-    private var job: Job? = null
+    private val duplicateFinder = DuplicateFinder()
+    private val _duplicates = MutableStateFlow<DuplicatesState>(DuplicatesState.Idle)
+    val duplicates: StateFlow<DuplicatesState> = _duplicates.asStateFlow()
 
-    /** Only the newest scan may publish; a cancelled one can still be finishing a write. */
+    private var job: Job? = null
+    private var duplicatesJob: Job? = null
+
+    /** Only the newest scan or check may publish; a cancelled one can still be finishing a write. */
     private val lock = Any()
     private var generation = 0
+    private var duplicatesGeneration = 0
 
     val rootPath: String = Environment.getExternalStorageDirectory().absolutePath
 
-    /** Starts a scan unless one is running or finished, or always when [force] is set. */
+    /** Starts a full scan unless one is running or finished, or always when [force] is set. */
     fun scan(force: Boolean = false) {
         refreshDevice()
         val current = _state.value
         if (!force && (current is ScanState.Scanning || current is ScanState.Done)) return
-        val previous = current.result
+        start(previous = null, fullPaths = emptyList())
+    }
+
+    /**
+     * Called when the app comes back to the foreground: scans if there is no result yet, and
+     * rescans in the background (keeping the old result on screen) when it may be out of date.
+     * After a handoff only what changed is read again: folders at [changedPaths] in full, and
+     * elsewhere only folders whose entries changed ([StorageScanner.scan]).
+     */
+    fun refresh(changedSince: Long, changedPaths: List<String>) {
+        val current = _state.value
+        if (current !is ScanState.Done) {
+            scan()
+            return
+        }
+        when (refreshNeeded(current.result.finishedAt, changedSince, SystemClock.elapsedRealtime())) {
+            Refresh.Full -> scan(force = true)
+            Refresh.Changed -> {
+                refreshDevice()
+                start(previous = current.result.root, fullPaths = changedPaths)
+            }
+            Refresh.None -> Unit
+        }
+    }
+
+    private fun start(previous: StorageNode?, fullPaths: List<String>) {
+        val shown = _state.value.result
         val gen = synchronized(lock) { ++generation }
         job?.cancel()
         job = scope.launch {
@@ -103,38 +151,53 @@ class StorageRepository(private val context: Context) {
                             files = scanner.filesScanned.get(),
                             bytes = scanner.bytesScanned.get(),
                             currentPath = scanner.currentPath,
-                            result = previous,
+                            result = shown,
                         ),
                     )
                     delay(100)
                 }
             }
             val outcome = try {
-                val root = scanner.scan()
+                val root = scanner.scan(previous, fullPaths)
                 val categories = LongArray(FileCategory.entries.size) { scanner.categoryBytes[it] }
                 val finished = SystemClock.elapsedRealtime()
                 ScanState.Done(ScanResult(root, categories, finished - started, finished))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                ScanState.Failed(e.message ?: e.javaClass.simpleName, previous)
+                ScanState.Failed(e.message ?: e.javaClass.simpleName, shown)
             }
             // Wait for the ticker to stop, or its last progress update could land after the result.
             ticker.cancelAndJoin()
-            publish(gen, outcome)
+            if (publish(gen, outcome) && outcome is ScanState.Done) findDuplicates(outcome.result.root)
         }
     }
 
-    /**
-     * Called when the app comes back to the foreground: scans if there is no result yet, and
-     * rescans in the background (keeping the old result on screen) when it may be out of date.
-     */
-    fun refresh(changedSince: Long) {
-        val current = _state.value
-        if (current is ScanState.Done && needsRefresh(current.result.finishedAt, changedSince, SystemClock.elapsedRealtime())) {
-            scan(force = true)
-        } else {
-            scan()
+    /** Checks the new tree for duplicates; earlier digests make this quick after a rescan. */
+    private fun findDuplicates(root: StorageNode) {
+        val shown = _duplicates.value.groups
+        val gen = synchronized(lock) { ++duplicatesGeneration }
+        duplicatesJob?.cancel()
+        duplicatesJob = scope.launch {
+            val lastUpdate = AtomicLong()
+            fun publishDuplicates(state: DuplicatesState) = synchronized(lock) {
+                if (gen == duplicatesGeneration) _duplicates.value = state
+            }
+            publishDuplicates(DuplicatesState.Checking(0L, 0L, shown))
+            val groups = try {
+                duplicateFinder.find(root) { checked, total ->
+                    val now = SystemClock.elapsedRealtime()
+                    val last = lastUpdate.get()
+                    if (now - last >= 100 && lastUpdate.compareAndSet(last, now)) {
+                        publishDuplicates(DuplicatesState.Checking(checked, total, shown))
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+            publishDuplicates(DuplicatesState.Done(groups))
         }
     }
 
@@ -152,10 +215,10 @@ class StorageRepository(private val context: Context) {
         }
     }
 
-    private fun publish(gen: Int, state: ScanState) {
-        synchronized(lock) {
-            if (gen == generation) _state.value = state
-        }
+    /** Publishes [state] if it comes from the newest scan; false when it is outdated. */
+    private fun publish(gen: Int, state: ScanState): Boolean = synchronized(lock) {
+        if (gen == generation) _state.value = state
+        gen == generation
     }
 }
 

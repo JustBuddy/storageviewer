@@ -46,6 +46,22 @@ object Format {
 
     fun count(n: Number): String = formatters().integer.format(n)
 
+    enum class AgoUnit { Today, Days, Weeks, Months, Years }
+
+    /** How long before [now] [time] was, in whole days, weeks, months or years (epoch ms). */
+    fun ago(time: Long, now: Long): Pair<AgoUnit, Int> {
+        val days = ((now - time) / DAY_MS).coerceAtLeast(0L).toInt()
+        return when {
+            days < 1 -> AgoUnit.Today to 0
+            days < 14 -> AgoUnit.Days to days
+            days < 60 -> AgoUnit.Weeks to days / 7
+            days < 730 -> AgoUnit.Months to days / 30
+            else -> AgoUnit.Years to days / 365
+        }
+    }
+
+    private const val DAY_MS = 24L * 60 * 60 * 1000
+
     /** Percentage of a whole; tiny non-zero shares read as "<1 %" instead of a misleading 0. */
     fun percent(part: Long, whole: Long): String {
         val format = formatters().percent

@@ -11,10 +11,18 @@ import wtf.buddyworks.storageviewer.StorageViewerApp
 import wtf.buddyworks.storageviewer.data.Access
 import wtf.buddyworks.storageviewer.data.AppEntry
 import wtf.buddyworks.storageviewer.data.AppsState
+import wtf.buddyworks.storageviewer.data.isUnused
 import wtf.buddyworks.storageviewer.system.Handoff
 import kotlinx.coroutines.flow.StateFlow
 
-enum class AppFilter { All, Downloaded, System }
+enum class AppFilter {
+    All,
+    Downloaded,
+    System,
+
+    /** Downloaded apps not used for months ([isUnused]). */
+    Unused,
+}
 
 /** Filter, search and list state; the filter and search survive Android ending the process. */
 @OptIn(SavedStateHandleSaveableApi::class)
@@ -42,17 +50,21 @@ class AppsViewModel(private val app: StorageViewerApp, saved: SavedStateHandle) 
     }
 
     /** The apps matching the current filter and search, still sorted by size. */
-    fun visible(apps: List<AppEntry>): List<AppEntry> = filterApps(apps, filter, query)
+    fun visible(apps: List<AppEntry>): List<AppEntry> = filterApps(apps, filter, query, System.currentTimeMillis())
 }
 
-/** The [apps] in [filter] whose label or package name contains [query], in their original order. */
-fun filterApps(apps: List<AppEntry>, filter: AppFilter, query: String): List<AppEntry> {
+/**
+ * The [apps] in [filter] whose label or package name contains [query], in their original
+ * order. [now] (epoch ms) decides which apps are unused.
+ */
+fun filterApps(apps: List<AppEntry>, filter: AppFilter, query: String, now: Long): List<AppEntry> {
     val q = query.trim()
     return apps.filter { entry ->
         val matchesFilter = when (filter) {
             AppFilter.All -> true
             AppFilter.Downloaded -> !entry.isSystem
             AppFilter.System -> entry.isSystem
+            AppFilter.Unused -> entry.isUnused(now)
         }
         matchesFilter && (q.isEmpty() || entry.label.contains(q, ignoreCase = true) ||
             entry.packageName.contains(q, ignoreCase = true))

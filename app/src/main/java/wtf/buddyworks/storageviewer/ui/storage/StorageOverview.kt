@@ -220,7 +220,7 @@ fun StorageOverview(
                 }
                 items(largest.size, key = { "largest:" + largest[it].path }, contentType = { "file" }) { index ->
                     val file = largest[index]
-                    FileRow(file, rootPath, rootName, icons, isFirst = index == 0) { Handoff.openFile(context, file.path) }
+                    LocatedRow(file, rootPath, icons, isFirst = index == 0, onClick = { Handoff.openFile(context, file.path) })
                 }
             }
         }
@@ -438,33 +438,6 @@ private fun Breadcrumbs(node: StorageNode, rootName: String, onFocus: (StorageNo
             if (!last) {
                 Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(18.dp))
             }
-        }
-    }
-}
-
-@Composable
-private fun FileRow(file: StorageNode, rootPath: String, rootName: String, icons: ItemIcons, isFirst: Boolean, onClick: () -> Unit) {
-    val colors = OneUi.colors
-    val location = file.parent?.path?.removePrefix(rootPath)?.trim('/')?.replace("/", " › ")
-        ?.ifEmpty { rootName } ?: rootName
-    Column {
-        if (!isFirst) InsetDivider(start = 78.dp, end = 24.dp)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .heightIn(min = 64.dp)
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FileIcon(file, icons)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(file.name, style = OneUi.type.itemTitle, color = colors.textPrimary, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-                Text(location, style = OneUi.type.caption, color = colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.width(12.dp))
-            Text(Format.bytes(file.size), style = OneUi.type.itemValue, color = colors.textSecondary, maxLines = 1)
         }
     }
 }

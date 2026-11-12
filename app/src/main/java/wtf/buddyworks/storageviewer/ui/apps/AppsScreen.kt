@@ -18,8 +18,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SpaceDashboard
@@ -27,29 +25,23 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +58,7 @@ import wtf.buddyworks.storageviewer.ui.CardMargin
 import wtf.buddyworks.storageviewer.ui.NoticeCard
 import wtf.buddyworks.storageviewer.ui.PaneConfig
 import wtf.buddyworks.storageviewer.ui.ProgressCard
+import wtf.buddyworks.storageviewer.ui.SearchField
 import wtf.buddyworks.storageviewer.ui.components.BarPart
 import wtf.buddyworks.storageviewer.ui.components.CollapsingPane
 import wtf.buddyworks.storageviewer.ui.components.SegmentedBar
@@ -123,7 +116,7 @@ fun AppsListPane(
     ) {
         if (vm.searching) {
             item(key = "search", contentType = "search") {
-                SearchField(vm.query, onChange = { vm.query = it }, onClose = vm::closeSearch)
+                SearchField(vm.query, stringResource(R.string.search_apps), onChange = { vm.query = it }, onClose = vm::closeSearch)
             }
         }
         item(key = "filters", contentType = "filters") {
@@ -182,10 +175,25 @@ fun AppsListPane(
                 largest = largest,
                 isFirst = index == 0,
                 isLast = index == visible.lastIndex,
+                showLastUsed = vm.filter == AppFilter.Unused,
                 modifier = Modifier.animateItem(),
                 onClick = { Handoff.openAppInfo(context, app.packageName) },
             )
         }
+    }
+}
+
+/** "Last used 5 months ago", or "No use recorded" when [lastUsedAt] is 0. */
+@Composable
+fun lastUsedText(lastUsedAt: Long, now: Long): String {
+    if (lastUsedAt <= 0L) return stringResource(R.string.last_used_never)
+    val (unit, n) = Format.ago(lastUsedAt, now)
+    return when (unit) {
+        Format.AgoUnit.Today -> stringResource(R.string.last_used_today)
+        Format.AgoUnit.Days -> pluralStringResource(R.plurals.last_used_days, n, n)
+        Format.AgoUnit.Weeks -> pluralStringResource(R.plurals.last_used_weeks, n, n)
+        Format.AgoUnit.Months -> pluralStringResource(R.plurals.last_used_months, n, n)
+        Format.AgoUnit.Years -> pluralStringResource(R.plurals.last_used_years, n, n)
     }
 }
 
@@ -202,6 +210,7 @@ private fun AppRow(
     largest: Long,
     isFirst: Boolean,
     isLast: Boolean,
+    showLastUsed: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -243,10 +252,10 @@ private fun AppRow(
                 Text(Format.bytes(app.totalBytes), style = OneUi.type.itemValue, color = colors.textSecondary, maxLines = 1)
             }
             Text(
-                if (app.hasStats) {
-                    stringResource(R.string.app_row_breakdown, Format.bytes(app.userDataBytes), Format.bytes(app.cacheBytes))
-                } else {
-                    stringResource(R.string.app_install_size)
+                when {
+                    showLastUsed && app.lastUsedAt != null -> lastUsedText(app.lastUsedAt, System.currentTimeMillis())
+                    app.hasStats -> stringResource(R.string.app_row_breakdown, Format.bytes(app.userDataBytes), Format.bytes(app.cacheBytes))
+                    else -> stringResource(R.string.app_install_size)
                 },
                 style = OneUi.type.caption,
                 color = colors.textSecondary,
@@ -272,7 +281,7 @@ private fun AppRow(
 }
 
 /**
- * My Files-style tab pill: All / Downloaded / System. Each tab gets the width its label needs
+ * My Files-style tab pill: All / Downloaded / System / Unused. Each tab gets the width its label needs
  * in bold (so selecting one never shifts the others) plus an equal share of what is left; a
  * pill too narrow for all labels shrinks them proportionally and the text scales down to fit.
  */
@@ -283,6 +292,7 @@ private fun FilterTabs(selected: AppFilter, onSelect: (AppFilter) -> Unit) {
         AppFilter.All to stringResource(R.string.filter_all),
         AppFilter.Downloaded to stringResource(R.string.filter_downloaded),
         AppFilter.System to stringResource(R.string.filter_system),
+        AppFilter.Unused to stringResource(R.string.filter_unused),
     )
     val style = OneUi.type.itemSubtitle
     val boldStyle = style.copy(fontWeight = FontWeight.Bold)
@@ -336,40 +346,3 @@ private fun FilterTabs(selected: AppFilter, onSelect: (AppFilter) -> Unit) {
 }
 
 private val TabPadding = 12.dp
-
-@Composable
-private fun SearchField(query: String, onChange: (String) -> Unit, onClose: () -> Unit) {
-    val colors = OneUi.colors
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    Row(
-        Modifier
-            .padding(horizontal = CardMargin)
-            .padding(bottom = 12.dp)
-            .fillMaxWidth()
-            .clip(CircleShape)
-            .background(colors.card)
-            .padding(start = 18.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Search, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(12.dp))
-        Box(Modifier.weight(1f).padding(vertical = 14.dp)) {
-            if (query.isEmpty()) {
-                Text(stringResource(R.string.search_apps), style = OneUi.type.body, color = colors.textSecondary)
-            }
-            BasicTextField(
-                value = query,
-                onValueChange = onChange,
-                singleLine = true,
-                textStyle = OneUi.type.body.copy(color = colors.textPrimary),
-                cursorBrush = SolidColor(colors.accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus),
-            )
-        }
-        ToolbarIcon(Icons.Rounded.Close, stringResource(R.string.action_clear_search), onClose, tint = colors.textSecondary)
-    }
-}

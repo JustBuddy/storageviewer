@@ -4,17 +4,29 @@ import java.util.PriorityQueue
 
 /**
  * One file or folder in the scanned tree. Fields are filled in by [StorageScanner] and are
- * never changed after the scan result is published.
+ * never changed after the scan result is published, except [parent] (see there).
  */
 class StorageNode internal constructor(
     /** File name, or the absolute path for the root. */
     val name: String,
-    val parent: StorageNode?,
+    parent: StorageNode?,
     val isDirectory: Boolean,
     /** File type for files; null for folders. */
     val category: FileCategory?,
+    /** Modification time in milliseconds. */
     val lastModified: Long,
 ) {
+    /**
+     * The folder this node is in. A rescan takes over the files of unchanged folders and moves
+     * them to the new node for the same folder, so the path stays the same.
+     */
+    @Volatile
+    var parent: StorageNode? = parent
+        internal set
+
+    /** A folder's modification time in nanoseconds ([EntryStat.stamp]); 0 for files. */
+    internal var stamp: Long = 0L
+
     var size: Long = 0L
         internal set
 
@@ -47,7 +59,7 @@ class StorageNode internal constructor(
     val itemCount: Int get() = children.size
 
     val path: String
-        get() = if (parent == null) name else parent.path + "/" + name
+        get() = parent?.let { it.path + "/" + name } ?: name
 
     /** What this node mostly consists of, or null for an empty folder. */
     val dominantCategory: FileCategory?
