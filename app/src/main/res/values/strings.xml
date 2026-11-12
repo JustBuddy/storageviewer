@@ -66,7 +66,7 @@
     <string name="access_files_body">StorageViewer needs All files access to measure folder sizes. It only looks: it never changes, moves or deletes anything.</string>
     <string name="access_files_button">Allow access</string>
     <string name="access_usage_title">Show full app sizes</string>
-    <string name="access_usage_body">Allow usage access so StorageViewer can read each app\'s data and cache size. Until then, only install sizes are shown.</string>
+    <string name="access_usage_body">Allow usage access so StorageViewer can read each app\'s data and cache size, and when you last used it. Until then, only install sizes are shown.</string>
     <string name="access_usage_button">Allow usage access</string>
 
     <string name="action_refresh">Refresh</string>
@@ -108,4 +108,54 @@
     <string name="error_no_app_info">App info isn\'t available</string>
     <string name="error_no_settings">This settings page isn\'t available</string>
     <string name="apk_in_files">Showing the APK in My Files, where it can be installed</string>
+
+    <string name="filter_unused">Unused</string>
+    <string name="last_used_never">No use recorded</string>
+    <string name="last_used_today">Last used today</string>
+    <plurals name="last_used_days">
+        <item quantity="one">Last used %d day ago</item>
+        <item quantity="other">Last used %d days ago</item>
+    </plurals>
+    <plurals name="last_used_weeks">
+        <item quantity="one">Last used %d week ago</item>
+        <item quantity="other">Last used %d weeks ago</item>
+    </plurals>
+    <plurals name="last_used_months">
+        <item quantity="one">Last used %d month ago</item>
+        <item quantity="other">Last used %d months ago</item>
+    </plurals>
+    <plurals name="last_used_years">
+        <item quantity="one">Last used %d year ago</item>
+        <item quantity="other">Last used %d years ago</item>
+    </plurals>
+
+    <string name="search_files">Search files and folders</string>
+    <plurals name="matches">
+        <item quantity="one">%s match</item>
+        <item quantity="other">%s matches</item>
+    </plurals>
+    <string name="no_matches">Nothing found</string>
+
+    <string name="worth_checking">Worth checking</string>
+    <string name="find_duplicates">Duplicate files</string>
+    <string name="find_large_old">Large old files</string>
+    <string name="find_unused_apps">Unused apps</string>
+    <string name="find_leftovers">Folders of uninstalled apps</string>
+    <string name="checking_files">Checking files…</string>
+    <string name="checking_files_percent">Checking files… %1$s</string>
+    <string name="none_found">None found</string>
+    <plurals name="files_with_copies">
+        <item quantity="one">%s file with copies</item>
+        <item quantity="other">%s files with copies</item>
+    </plurals>
+    <plurals name="identical_files">
+        <item quantity="one">%1$s identical file · %2$s extra</item>
+        <item quantity="other">%1$s identical files · %2$s extra</item>
+    </plurals>
+    <string name="extra_bytes">%1$s extra</string>
+    <string name="large_old_rule">At least %1$s, unchanged for over a year</string>
+    <string name="in_app_folders">%1$s of it in app folders, counted under Apps</string>
+    <string name="no_files_of_type">No files of this type</string>
+    <string name="uninstalled_app">Uninstalled app</string>
+    <string name="action_close">Close</string>
 </resources>

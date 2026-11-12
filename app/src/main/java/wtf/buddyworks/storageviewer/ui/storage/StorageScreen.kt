@@ -24,25 +24,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.FolderOff
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SpaceDashboard
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -58,29 +62,42 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import wtf.buddyworks.storageviewer.R
 import wtf.buddyworks.storageviewer.data.Access
+import wtf.buddyworks.storageviewer.data.AppEntry
 import wtf.buddyworks.storageviewer.data.DeviceStorage
+import wtf.buddyworks.storageviewer.data.DuplicatesState
 import wtf.buddyworks.storageviewer.data.FileCategory
+import wtf.buddyworks.storageviewer.data.FileSelection
 import wtf.buddyworks.storageviewer.data.Format
 import wtf.buddyworks.storageviewer.data.ScanResult
 import wtf.buddyworks.storageviewer.data.ScanState
 import wtf.buddyworks.storageviewer.data.StorageNode
+import wtf.buddyworks.storageviewer.data.largeOldFiles
+import wtf.buddyworks.storageviewer.data.leftoverFolders
+import wtf.buddyworks.storageviewer.data.searchTree
 import wtf.buddyworks.storageviewer.system.Handoff
 import wtf.buddyworks.storageviewer.ui.CardMargin
 import wtf.buddyworks.storageviewer.ui.PaneConfig
 import wtf.buddyworks.storageviewer.ui.NoticeCard
+import wtf.buddyworks.storageviewer.ui.SearchField
 import wtf.buddyworks.storageviewer.ui.appsColor
 import wtf.buddyworks.storageviewer.ui.categoryColor
 import wtf.buddyworks.storageviewer.ui.categoryLabel
 import wtf.buddyworks.storageviewer.ui.components.BarPart
 import wtf.buddyworks.storageviewer.ui.components.CollapsingPane
 import wtf.buddyworks.storageviewer.ui.components.GroupCard
+import wtf.buddyworks.storageviewer.ui.components.IconBadge
+import wtf.buddyworks.storageviewer.ui.components.InsetDivider
 import wtf.buddyworks.storageviewer.ui.components.LegendDot
 import wtf.buddyworks.storageviewer.ui.components.SectionHeader
 import wtf.buddyworks.storageviewer.ui.components.SegmentedBar
@@ -155,17 +172,22 @@ fun buildTreeRows(
 fun StorageListPane(
     vm: StorageViewModel,
     appsBytes: Long?,
+    /** Unused apps, or null when that is not known (no usage access or apps not loaded yet). */
+    unusedApps: List<AppEntry>?,
     config: PaneConfig,
     onShowOverview: () -> Unit,
+    onShowApps: (unusedOnly: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val device by vm.device.collectAsStateWithLifecycle()
+    val duplicates by vm.duplicates.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val icons = rememberItemIcons()
     // The last complete scan stays on screen while a rescan runs.
     val result = scan.result
+    val root = result?.root
     val rescanning = scan is ScanState.Scanning && result != null
     val foldersOnly = config.twoPane
     val rows = remember(result, vm.expanded, vm.childLimits, foldersOnly) {
@@ -174,11 +196,43 @@ fun StorageListPane(
     val subtitle = device?.let {
         stringResource(R.string.used_subtitle, Format.bytes(it.usedBytes), Format.bytes(it.totalBytes))
     }
-    // Items before the tree: large title (optional), summary, error card (if any), section header.
-    val treeOffset = (if (config.expandableTitle) 1 else 0) + (if (scan is ScanState.Failed) 1 else 0) + 2
+
+    var largeOld by remember { mutableStateOf<FileSelection?>(null) }
+    LaunchedEffect(root) {
+        if (root != null) largeOld = withContext(Dispatchers.Default) { largeOldFiles(root, System.currentTimeMillis()) }
+    }
+    val owners = LocalFolderOwners.current
+    val leftovers = remember(root, owners) { root?.let { leftoverFolders(it, owners) } ?: emptyList() }
+
+    val query = vm.query.trim()
+    val showResults = vm.searching && query.isNotEmpty() && root != null
+    var results by remember { mutableStateOf<List<StorageNode>?>(null) }
+    var resultsShown by remember(query) { mutableIntStateOf(ResultsPage) }
+    LaunchedEffect(root, query, vm.searching) {
+        if (!vm.searching || root == null || query.isEmpty()) {
+            results = null
+            return@LaunchedEffect
+        }
+        delay(150) // Typing replaces the search before it runs.
+        results = withContext(Dispatchers.Default) { searchTree(root, query) }
+    }
+
+    val openPanel: (StoragePanel) -> Unit = { panel ->
+        vm.openPanel(panel)
+        if (!config.twoPane) onShowOverview()
+    }
+    val openFolder: (StorageNode) -> Unit = { folder ->
+        vm.focus(folder)
+        if (!config.twoPane) onShowOverview()
+    }
+
+    val failed = scan as? ScanState.Failed
+    // Items before the tree: large title, search field, summary, error card, finds, section header.
+    val treeOffset = (if (config.expandableTitle) 1 else 0) + (if (vm.searching) 1 else 0) + 1 +
+        (if (failed != null) 1 else 0) + (if (result != null) 2 else 0) + 1
 
     LaunchedEffect(vm.revealRequest) {
-        if (vm.revealRequest == 0) return@LaunchedEffect
+        if (vm.revealRequest == 0 || showResults) return@LaunchedEffect
         val target = vm.focusedPath ?: return@LaunchedEffect
         val index = rows.indexOfFirst { it is TreeRow.Item && it.path == target }
         if (index < 0) return@LaunchedEffect
@@ -196,6 +250,11 @@ fun StorageListPane(
         bottomPadding = config.bottomPadding,
         modifier = modifier,
         actions = {
+            if (result != null) {
+                ToolbarIcon(Icons.Outlined.Search, stringResource(R.string.action_search), {
+                    if (vm.searching) vm.closeSearch() else vm.searching = true
+                })
+            }
             if (!config.twoPane && result != null) {
                 ToolbarIcon(Icons.Outlined.SpaceDashboard, stringResource(R.string.action_overview), onShowOverview)
             }
@@ -206,9 +265,25 @@ fun StorageListPane(
             }
         },
     ) {
+        if (vm.searching) {
+            item(key = "search", contentType = "search") {
+                SearchField(vm.query, stringResource(R.string.search_files), onChange = { vm.query = it }, onClose = vm::closeSearch)
+            }
+        }
+        if (showResults) {
+            searchResults(results, resultsShown, vm.rootPath, icons, openFolder) { resultsShown += ResultsPage }
+            return@CollapsingPane
+        }
         item(key = "summary", contentType = "summary") {
             // Progress shows here only for the first scan; a rescan keeps the legend.
-            StorageSummaryCard(device, result, appsBytes, (scan as? ScanState.Scanning)?.takeIf { result == null })
+            StorageSummaryCard(
+                device = device,
+                result = result,
+                appsBytes = appsBytes,
+                scanning = (scan as? ScanState.Scanning)?.takeIf { result == null },
+                onCategory = { openPanel(StoragePanel.Type(it)) },
+                onApps = { onShowApps(false) },
+            )
         }
         if (!vm.hasAccess) {
             item(key = "access", contentType = "access") {
@@ -223,7 +298,6 @@ fun StorageListPane(
             }
             return@CollapsingPane
         }
-        val failed = scan as? ScanState.Failed
         if (failed != null) {
             item(key = "failed", contentType = "access") {
                 NoticeCard(
@@ -237,6 +311,19 @@ fun StorageListPane(
             }
         }
         if (result != null) {
+            item(key = "finds-header", contentType = "section") {
+                SectionHeader(stringResource(R.string.worth_checking))
+            }
+            item(key = "finds", contentType = "finds") {
+                FindsCard(
+                    duplicates = duplicates,
+                    largeOld = largeOld,
+                    unusedApps = unusedApps,
+                    leftovers = leftovers,
+                    onOpen = openPanel,
+                    onUnusedApps = { onShowApps(true) },
+                )
+            }
             treeItems(
                 result = result,
                 rows = rows,
@@ -245,6 +332,192 @@ fun StorageListPane(
                 vm = vm,
                 config = config,
                 onShowOverview = onShowOverview,
+            )
+        }
+    }
+}
+
+/** Search results shown at first, and how many more each "Show more" adds. */
+private const val ResultsPage = 100
+
+private fun LazyListScope.searchResults(
+    results: List<StorageNode>?,
+    shown: Int,
+    rootPath: String,
+    icons: ItemIcons,
+    onFolder: (StorageNode) -> Unit,
+    onShowMore: () -> Unit,
+) {
+    if (results == null) return
+    item(key = "results-header", contentType = "section") {
+        SectionHeader(pluralStringResource(R.plurals.matches, results.size, Format.count(results.size)))
+    }
+    if (results.isEmpty()) {
+        item(key = "no-results", contentType = "empty") {
+            Text(
+                stringResource(R.string.no_matches),
+                style = OneUi.type.body,
+                color = OneUi.colors.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+            )
+        }
+        return
+    }
+    val visible = results.size.coerceAtMost(shown)
+    val hidden = results.size - visible
+    items(visible, key = { "result:" + results[it].path }, contentType = { "result" }) { index ->
+        val node = results[index]
+        val context = LocalContext.current
+        LocatedRow(
+            node = node,
+            rootPath = rootPath,
+            icons = icons,
+            isFirst = index == 0,
+            modifier = Modifier
+                .padding(horizontal = CardMargin)
+                .groupItem(index == 0, index == visible - 1 && hidden == 0, OneUi.colors.card),
+            horizontalPadding = 20.dp,
+            onClick = { if (node.isDirectory) onFolder(node) else Handoff.openFile(context, node.path) },
+            onOverview = if (node.isDirectory) ({ onFolder(node) }) else null,
+        )
+    }
+    if (hidden > 0) {
+        item(key = "results-more", contentType = "more") {
+            var hiddenBytes = 0L
+            for (i in visible until results.size) hiddenBytes += results[i].size
+            Text(
+                pluralStringResource(R.plurals.show_more, hidden, Format.count(hidden), Format.bytes(hiddenBytes)),
+                style = OneUi.type.itemSubtitle.copy(fontWeight = FontWeight.SemiBold),
+                color = OneUi.colors.accent,
+                modifier = Modifier
+                    .padding(horizontal = CardMargin)
+                    .fillMaxWidth()
+                    .groupItem(isFirst = false, isLast = true, OneUi.colors.card)
+                    .clickable(onClick = onShowMore)
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+            )
+        }
+    }
+}
+
+/** One line of the "Worth checking" card. Without [onClick] it only reports (nothing to show yet). */
+private class Find(
+    val icon: ImageVector,
+    val title: String,
+    val subtitle: String,
+    val value: String?,
+    val busy: Boolean,
+    val onClick: (() -> Unit)?,
+)
+
+/**
+ * Where space can be won back: duplicates, large old files, unused apps and folders of
+ * uninstalled apps. Each line opens its list; nothing here changes anything.
+ */
+@Composable
+private fun FindsCard(
+    duplicates: DuplicatesState,
+    largeOld: FileSelection?,
+    unusedApps: List<AppEntry>?,
+    leftovers: List<StorageNode>,
+    onOpen: (StoragePanel) -> Unit,
+    onUnusedApps: () -> Unit,
+) {
+    val groups = duplicates.groups
+    val finds = buildList {
+        // Idle only for the moment between a scan finishing and its check starting.
+        val busy = duplicates !is DuplicatesState.Done
+        add(
+            Find(
+                icon = Icons.Outlined.ContentCopy,
+                title = stringResource(R.string.find_duplicates),
+                subtitle = when {
+                    groups.isNullOrEmpty() && busy ->
+                        (duplicates as? DuplicatesState.Checking)?.let { checkingText(it) } ?: stringResource(R.string.checking_files)
+                    groups.isNullOrEmpty() -> stringResource(R.string.none_found)
+                    else -> pluralStringResource(R.plurals.files_with_copies, groups.size, Format.count(groups.size))
+                },
+                value = groups?.takeIf { it.isNotEmpty() }?.let { found -> Format.bytes(found.sumOf { it.extraBytes }) },
+                busy = busy,
+                onClick = if (!groups.isNullOrEmpty()) ({ onOpen(StoragePanel.Duplicates) }) else null,
+            ),
+        )
+        if (largeOld != null && largeOld.files.isNotEmpty()) {
+            add(
+                Find(
+                    icon = Icons.Outlined.History,
+                    title = stringResource(R.string.find_large_old),
+                    subtitle = pluralStringResource(R.plurals.files, largeOld.files.size, Format.count(largeOld.files.size)),
+                    value = Format.bytes(largeOld.totalBytes),
+                    busy = false,
+                    onClick = { onOpen(StoragePanel.LargeOld) },
+                ),
+            )
+        }
+        if (!unusedApps.isNullOrEmpty()) {
+            add(
+                Find(
+                    icon = Icons.Outlined.HourglassEmpty,
+                    title = stringResource(R.string.find_unused_apps),
+                    subtitle = pluralStringResource(R.plurals.apps_count, unusedApps.size, Format.count(unusedApps.size)),
+                    value = Format.bytes(unusedApps.sumOf { it.totalBytes }),
+                    busy = false,
+                    onClick = onUnusedApps,
+                ),
+            )
+        }
+        if (leftovers.isNotEmpty()) {
+            add(
+                Find(
+                    icon = Icons.Outlined.FolderOff,
+                    title = stringResource(R.string.find_leftovers),
+                    subtitle = pluralStringResource(R.plurals.folders, leftovers.size, Format.count(leftovers.size)),
+                    value = Format.bytes(leftovers.sumOf { it.size }),
+                    busy = false,
+                    onClick = { onOpen(StoragePanel.Leftovers) },
+                ),
+            )
+        }
+    }
+    GroupCard(Modifier.padding(horizontal = CardMargin)) {
+        finds.forEachIndexed { index, find ->
+            if (index > 0) InsetDivider(start = 74.dp)
+            FindRow(find)
+        }
+    }
+}
+
+@Composable
+private fun FindRow(find: Find) {
+    val colors = OneUi.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (find.onClick != null) Modifier.clickable(onClick = find.onClick) else Modifier)
+            .heightIn(min = 68.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconBadge(find.icon, colors.accent, size = 40.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(find.title, style = OneUi.type.itemTitle, color = colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(find.subtitle, style = OneUi.type.caption, color = colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (find.value != null) {
+            Spacer(Modifier.width(12.dp))
+            Text(find.value, style = OneUi.type.itemValue, color = colors.textSecondary, maxLines = 1)
+        }
+        if (find.busy) {
+            Spacer(Modifier.width(12.dp))
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = colors.accent,
+                trackColor = colors.track,
             )
         }
     }
@@ -397,10 +670,10 @@ private fun TreeNodeRow(
                     )
                 }
             }
-            ItemContent(node, row.parentSize, icons)
+            ItemContent(node, row.parentSize, icons, row.path)
         }
         if (menuOpen) {
-            RowMenu(onDismiss = { menuOpen = false }, node = node, path = row.path, onOverview = onOverview)
+            ItemMenu(node = node, path = row.path, onDismiss = { menuOpen = false }, onOverview = onOverview)
         }
     }
 }
@@ -430,49 +703,6 @@ private fun MoreRow(row: TreeRow.More, isFirst: Boolean, isLast: Boolean, icons:
     }
 }
 
-@Composable
-private fun RowMenu(
-    onDismiss: () -> Unit,
-    node: StorageNode,
-    path: String,
-    onOverview: () -> Unit,
-) {
-    val context = LocalContext.current
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
-        containerColor = OneUi.colors.card,
-    ) {
-        @Composable
-        fun entry(text: String, icon: ImageVector, action: () -> Unit) {
-            DropdownMenuItem(
-                text = { Text(text, style = OneUi.type.body, color = OneUi.colors.textPrimary) },
-                leadingIcon = { Icon(icon, contentDescription = null, tint = OneUi.colors.textPrimary) },
-                onClick = {
-                    onDismiss()
-                    action()
-                },
-            )
-        }
-        if (node.isDirectory) {
-            if (!node.restricted) {
-                entry(stringResource(R.string.action_overview), Icons.Outlined.SpaceDashboard, onOverview)
-            }
-            entry(stringResource(R.string.action_open_in_files), Icons.Outlined.FolderOpen) {
-                Handoff.openFolder(context, path)
-            }
-        } else {
-            entry(stringResource(R.string.action_open), Icons.AutoMirrored.Outlined.OpenInNew) {
-                Handoff.openFile(context, path)
-            }
-            entry(stringResource(R.string.action_show_in_files), Icons.Outlined.FolderOpen) {
-                Handoff.openFolder(context, path.substringBeforeLast('/'))
-            }
-        }
-    }
-}
-
 /** Device usage split into apps, file types and system, like Device care's storage card. */
 @Composable
 private fun StorageSummaryCard(
@@ -480,19 +710,22 @@ private fun StorageSummaryCard(
     result: ScanResult?,
     appsBytes: Long?,
     scanning: ScanState.Scanning?,
+    onCategory: (FileCategory) -> Unit,
+    onApps: () -> Unit,
 ) {
     val colors = OneUi.colors
     val used = device?.usedBytes ?: 0L
     val total = device?.totalBytes ?: 0L
 
-    data class Entry(val label: String, val bytes: Long, val color: Color)
+    /** [onClick] opens what the entry is made of; System and Free have nothing to list. */
+    class Entry(val label: String, val bytes: Long, val color: Color, val onClick: (() -> Unit)? = null)
 
     val entries = buildList {
         if (result != null) {
             val fileBytes = result.categoryBytes.sum()
-            if (appsBytes != null) add(Entry(stringResource(R.string.cat_apps), appsBytes, appsColor()))
+            if (appsBytes != null) add(Entry(stringResource(R.string.cat_apps), appsBytes, appsColor(), onApps))
             FileCategory.entries.forEach { category ->
-                add(Entry(categoryLabel(category), result.categoryBytes[category.ordinal], categoryColor(category)))
+                add(Entry(categoryLabel(category), result.categoryBytes[category.ordinal], categoryColor(category)) { onCategory(category) })
             }
             val rest = (used - fileBytes - (appsBytes ?: 0L)).coerceAtLeast(0L)
             val restLabel = stringResource(if (appsBytes != null) R.string.cat_system else R.string.cat_apps_system)
@@ -534,13 +767,9 @@ private fun StorageSummaryCard(
                 val inline = maxWidth / 2 >= 200.dp
                 Column {
                     legend.chunked(2).forEach { pair ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = if (inline) 5.dp else 6.dp),
-                        ) {
+                        Row(Modifier.fillMaxWidth()) {
                             pair.forEach { entry ->
-                                LegendCell(entry.label, entry.bytes, entry.color, inline, Modifier.weight(1f))
+                                LegendCell(entry.label, entry.bytes, entry.color, inline, entry.onClick, Modifier.weight(1f))
                             }
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
@@ -552,14 +781,20 @@ private fun StorageSummaryCard(
 }
 
 @Composable
-private fun LegendCell(label: String, bytes: Long, color: Color, inline: Boolean, modifier: Modifier) {
+private fun LegendCell(label: String, bytes: Long, color: Color, inline: Boolean, onClick: (() -> Unit)?, modifier: Modifier) {
     val colors = OneUi.colors
     val dot: Modifier = if (color == colors.track) {
         Modifier.border(1.dp, colors.textSection.copy(alpha = 0.35f), CircleShape)
     } else {
         Modifier
     }
-    Row(modifier.padding(end = 12.dp), verticalAlignment = if (inline) Alignment.CenterVertically else Alignment.Top) {
+    Row(
+        modifier
+            .padding(end = 8.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(end = 4.dp, top = if (inline) 5.dp else 6.dp, bottom = if (inline) 5.dp else 6.dp),
+        verticalAlignment = if (inline) Alignment.CenterVertically else Alignment.Top) {
         LegendDot(color, Modifier.offset(y = if (inline) 0.dp else 5.dp).then(dot))
         Spacer(Modifier.width(10.dp))
         if (inline) {

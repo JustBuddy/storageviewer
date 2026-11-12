@@ -50,4 +50,17 @@ class FormatTest {
         assertEquals("0%", Format.percent(0, 10_000))
         assertEquals("50%", Format.percent(5, 10))
     }
+
+    @Test
+    fun agoRoundsDownToTheLargestSensibleUnit() {
+        val day = 24L * 60 * 60 * 1000
+        val now = 10_000L * day
+        assertEquals(Format.AgoUnit.Today to 0, Format.ago(now - day / 2, now))
+        assertEquals(Format.AgoUnit.Days to 13, Format.ago(now - 13 * day, now))
+        assertEquals(Format.AgoUnit.Weeks to 2, Format.ago(now - 14 * day, now))
+        assertEquals(Format.AgoUnit.Months to 3, Format.ago(now - 90 * day, now))
+        assertEquals(Format.AgoUnit.Years to 2, Format.ago(now - 730 * day, now))
+        // A clock that went backwards reads as today, not as a negative age.
+        assertEquals(Format.AgoUnit.Today to 0, Format.ago(now + day, now))
+    }
 }

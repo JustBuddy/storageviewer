@@ -1,5 +1,6 @@
 package wtf.buddyworks.storageviewer.data
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,6 +18,15 @@ class RefreshPolicyTest {
     @Test
     fun aHandoffAfterTheScanRefreshes() {
         assertTrue(needsRefresh(producedAt = scannedAt, changedSince = scannedAt + 1L, now = scannedAt + 5_000L))
+    }
+
+    @Test
+    fun aHandoffRescansWhatChangedButOldDataIsReadAgainInFull() {
+        assertEquals(Refresh.None, refreshNeeded(producedAt = scannedAt, changedSince = 0L, now = scannedAt + 5_000L))
+        assertEquals(Refresh.Changed, refreshNeeded(producedAt = scannedAt, changedSince = scannedAt + 1L, now = scannedAt + 5_000L))
+        val late = scannedAt + STALE_AFTER_MS + 1L
+        assertEquals(Refresh.Full, refreshNeeded(producedAt = scannedAt, changedSince = 0L, now = late))
+        assertEquals(Refresh.Full, refreshNeeded(producedAt = scannedAt, changedSince = scannedAt + 1L, now = late))
     }
 
     @Test

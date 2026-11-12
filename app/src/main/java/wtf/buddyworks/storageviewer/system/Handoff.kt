@@ -31,11 +31,22 @@ object Handoff {
     var lastHandoffAt: Long = 0L
         private set
 
+    /** Folders handed to another app, with the time; the newest few are kept. */
+    private val handedOff = ArrayDeque<Pair<Long, String>>()
+
+    /**
+     * Folders handed to another app after [since] ([SystemClock.elapsedRealtime]): a file's
+     * folder, or the folder opened in My Files. A rescan reads these in full.
+     */
+    fun foldersHandedOffSince(since: Long): List<String> = synchronized(handedOff) {
+        handedOff.filter { it.first > since }.map { it.second }.distinct()
+    }
+
     /** Android's App info page, where the user can open, clear or uninstall the app. */
     fun openAppInfo(context: Context, packageName: String) {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             .setData(Uri.fromParts("package", packageName, null))
-        if (start(context, listOf(intent), R.string.error_no_app_info)) markHandoff()
+        if (start(context, listOf(intent), R.string.error_no_app_info)) markHandoff(null)
     }
 
     /** Opens a file in its default viewer with a read-only grant. */
@@ -61,7 +72,7 @@ object Handoff {
         val intent = Intent(Intent.ACTION_VIEW)
             .setDataAndType(uri, mime)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (start(context, listOf(intent), R.string.error_no_viewer)) markHandoff()
+        if (start(context, listOf(intent), R.string.error_no_viewer)) markHandoff(file.parent)
     }
 
     /** Opens a folder in Samsung My Files, falling back to Android's Files app. */
@@ -78,7 +89,7 @@ object Handoff {
         )
         val files = Intent(Intent.ACTION_VIEW)
             .setDataAndType(documentUri, DocumentsContract.Document.MIME_TYPE_DIR)
-        if (start(context, listOf(myFiles, files), R.string.error_no_file_manager)) markHandoff()
+        if (start(context, listOf(myFiles, files), R.string.error_no_file_manager)) markHandoff(path)
     }
 
     /** Opens the first Settings page that exists for a special access. */
@@ -86,8 +97,15 @@ object Handoff {
         start(context, intents, R.string.error_no_settings)
     }
 
-    private fun markHandoff() {
-        lastHandoffAt = SystemClock.elapsedRealtime()
+    private fun markHandoff(folder: String?) {
+        val now = SystemClock.elapsedRealtime()
+        if (folder != null) {
+            synchronized(handedOff) {
+                handedOff.addLast(now to folder)
+                while (handedOff.size > 16) handedOff.removeFirst()
+            }
+        }
+        lastHandoffAt = now
     }
 
     /** Starts the first intent that resolves; false (after a toast) when none does. */

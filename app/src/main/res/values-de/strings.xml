@@ -64,7 +64,7 @@
     <string name="access_files_body">StorageViewer braucht Zugriff auf alle Dateien, um Ordnergrößen zu messen. Die App sieht nur hin: Sie ändert, verschiebt oder löscht nie etwas.</string>
     <string name="access_files_button">Zugriff erlauben</string>
     <string name="access_usage_title">Vollständige App-Größen anzeigen</string>
-    <string name="access_usage_body">Erlaube den Zugriff auf Nutzungsdaten, damit StorageViewer Daten- und Cache-Größe jeder App lesen kann. Bis dahin wird nur die Installationsgröße angezeigt.</string>
+    <string name="access_usage_body">Erlaube den Zugriff auf Nutzungsdaten, damit StorageViewer Daten- und Cache-Größe jeder App lesen kann und wann du sie zuletzt verwendet hast. Bis dahin wird nur die Installationsgröße angezeigt.</string>
     <string name="access_usage_button">Nutzungsdatenzugriff erlauben</string>
 
     <string name="action_refresh">Aktualisieren</string>
@@ -106,4 +106,54 @@
     <string name="error_no_app_info">App-Info ist nicht verfügbar</string>
     <string name="error_no_settings">Diese Einstellungsseite ist nicht verfügbar</string>
     <string name="apk_in_files">Die APK wird in Eigene Dateien gezeigt, wo sie installiert werden kann</string>
+
+    <string name="filter_unused">Ungenutzt</string>
+    <string name="last_used_never">Keine Nutzung erfasst</string>
+    <string name="last_used_today">Zuletzt verwendet: heute</string>
+    <plurals name="last_used_days">
+        <item quantity="one">Zuletzt verwendet vor %d Tag</item>
+        <item quantity="other">Zuletzt verwendet vor %d Tagen</item>
+    </plurals>
+    <plurals name="last_used_weeks">
+        <item quantity="one">Zuletzt verwendet vor %d Woche</item>
+        <item quantity="other">Zuletzt verwendet vor %d Wochen</item>
+    </plurals>
+    <plurals name="last_used_months">
+        <item quantity="one">Zuletzt verwendet vor %d Monat</item>
+        <item quantity="other">Zuletzt verwendet vor %d Monaten</item>
+    </plurals>
+    <plurals name="last_used_years">
+        <item quantity="one">Zuletzt verwendet vor %d Jahr</item>
+        <item quantity="other">Zuletzt verwendet vor %d Jahren</item>
+    </plurals>
+
+    <string name="search_files">Dateien und Ordner suchen</string>
+    <plurals name="matches">
+        <item quantity="one">%s Treffer</item>
+        <item quantity="other">%s Treffer</item>
+    </plurals>
+    <string name="no_matches">Nichts gefunden</string>
+
+    <string name="worth_checking">Einen Blick wert</string>
+    <string name="find_duplicates">Doppelte Dateien</string>
+    <string name="find_large_old">Große alte Dateien</string>
+    <string name="find_unused_apps">Ungenutzte Apps</string>
+    <string name="find_leftovers">Ordner deinstallierter Apps</string>
+    <string name="checking_files">Dateien werden geprüft…</string>
+    <string name="checking_files_percent">Dateien werden geprüft… %1$s</string>
+    <string name="none_found">Keine gefunden</string>
+    <plurals name="files_with_copies">
+        <item quantity="one">%s Datei mit Kopien</item>
+        <item quantity="other">%s Dateien mit Kopien</item>
+    </plurals>
+    <plurals name="identical_files">
+        <item quantity="one">%1$s identische Datei · %2$s zusätzlich</item>
+        <item quantity="other">%1$s identische Dateien · %2$s zusätzlich</item>
+    </plurals>
+    <string name="extra_bytes">%1$s zusätzlich</string>
+    <string name="large_old_rule">Mindestens %1$s, seit über einem Jahr unverändert</string>
+    <string name="in_app_folders">Davon %1$s in App-Ordnern, unter Apps gezählt</string>
+    <string name="no_files_of_type">Keine Dateien dieses Typs</string>
+    <string name="uninstalled_app">Deinstallierte App</string>
+    <string name="action_close">Schließen</string>
 </resources>
