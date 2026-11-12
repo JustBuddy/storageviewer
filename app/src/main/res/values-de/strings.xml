@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_storage">Speicher</string>
+    <string name="nav_apps">Apps</string>
+    <string name="storage_title">Speicherplatz</string>
+    <string name="apps_title">Apps</string>
+    <string name="internal_storage">Interner Speicher</string>
+
+    <string name="used_percent">%1$s verwendet</string>
+    <string name="used_of_total">%1$s / %2$s</string>
+    <string name="used_subtitle">%1$s von %2$s belegt</string>
+
+    <string name="cat_apps">Apps</string>
+    <string name="cat_images">Bilder</string>
+    <string name="cat_videos">Videos</string>
+    <string name="cat_documents">Dokumente</string>
+    <string name="cat_audio">Audio</string>
+    <string name="cat_archives">Archive &amp; APKs</string>
+    <string name="cat_other">Andere Dateien</string>
+    <string name="cat_system">System</string>
+    <string name="cat_apps_system">Apps &amp; System</string>
+    <string name="cat_free">Frei</string>
+
+    <string name="scanning">Wird analysiert…</string>
+    <string name="scanning_progress">%1$s Dateien · %2$s</string>
+    <string name="scan_failed">Analyse fehlgeschlagen: %1$s</string>
+    <string name="tree_summary">%1$s · %2$s</string>
+
+    <plurals name="items">
+        <item quantity="one">%s Objekt</item>
+        <item quantity="other">%s Objekte</item>
+    </plurals>
+    <plurals name="files">
+        <item quantity="one">%s Datei</item>
+        <item quantity="other">%s Dateien</item>
+    </plurals>
+    <plurals name="folders">
+        <item quantity="one">%s Ordner</item>
+        <item quantity="other">%s Ordner</item>
+    </plurals>
+    <plurals name="apps_count">
+        <item quantity="one">%s App</item>
+        <item quantity="other">%s Apps</item>
+    </plurals>
+    <plurals name="other_items">
+        <item quantity="one">%s weiteres Objekt</item>
+        <item quantity="other">%s weitere Objekte</item>
+    </plurals>
+    <plurals name="other_apps">
+        <item quantity="one">%s weitere App</item>
+        <item quantity="other">%s weitere Apps</item>
+    </plurals>
+    <plurals name="show_more">
+        <item quantity="one">%1$s weiteres anzeigen · %2$s</item>
+        <item quantity="other">%1$s weitere anzeigen · %2$s</item>
+    </plurals>
+
+    <string name="protected_folder">Durch Android geschützt · zählt zu Apps</string>
+    <string name="protected_note">Android lässt keine App in Android/data und Android/obb hineinsehen. Deren Inhalt ist in der Größe der jeweiligen App unter Apps enthalten.</string>
+    <string name="empty_folder">Leerer Ordner</string>
+
+    <string name="access_files_title">Sieh, was Speicherplatz belegt</string>
+    <string name="access_files_body">StorageViewer braucht Zugriff auf alle Dateien, um Ordnergrößen zu messen. Die App sieht nur hin: Sie ändert, verschiebt oder löscht nie etwas.</string>
+    <string name="access_files_button">Zugriff erlauben</string>
+    <string name="access_usage_title">Vollständige App-Größen anzeigen</string>
+    <string name="access_usage_body">Erlaube den Zugriff auf Nutzungsdaten, damit StorageViewer Daten- und Cache-Größe jeder App lesen kann. Bis dahin wird nur die Installationsgröße angezeigt.</string>
+    <string name="access_usage_button">Nutzungsdatenzugriff erlauben</string>
+
+    <string name="action_refresh">Aktualisieren</string>
+    <string name="action_overview">Übersicht</string>
+    <string name="action_back">Zurück</string>
+    <string name="action_search">Suchen</string>
+    <string name="action_clear_search">Suche löschen</string>
+    <string name="action_open">Öffnen</string>
+    <string name="action_open_in_files">In Eigene Dateien öffnen</string>
+    <string name="action_show_in_files">In Eigene Dateien zeigen</string>
+
+    <string name="overview_title">Übersicht</string>
+    <string name="largest_files">Größte Dateien inkl. Unterordner</string>
+    <string name="contents">Inhalt</string>
+    <string name="folder_stats">%1$s · %2$s</string>
+
+    <string name="filter_all">Alle</string>
+    <string name="filter_downloaded">Heruntergeladen</string>
+    <string name="filter_system">System</string>
+    <string name="search_apps">Apps suchen</string>
+    <string name="no_apps_found">Keine Apps gefunden</string>
+    <string name="loading_apps">Apps werden geladen… %1$s / %2$s</string>
+    <string name="app_part_code">App</string>
+    <string name="app_part_data">Daten</string>
+    <string name="app_part_cache">Cache</string>
+    <string name="app_install_size">Installationsgröße</string>
+    <string name="app_row_breakdown">Daten %1$s · Cache %2$s</string>
+    <string name="apps_subtitle">%1$s · %2$s</string>
+    <string name="app_storage">App-Speicher</string>
+    <string name="cache_hint">Davon sind %1$s Cache, den Apps neu erstellen können. Du kannst ihn auf der App-Info-Seite jeder App leeren.</string>
+
+    <string name="error_no_viewer">Keine App kann diese Datei öffnen</string>
+    <string name="error_no_file_manager">Kein Dateimanager gefunden</string>
+    <string name="error_no_app_info">App-Info ist nicht verfügbar</string>
+    <string name="error_no_settings">Diese Einstellungsseite ist nicht verfügbar</string>
+    <string name="read_only_note">Nur lesen: StorageViewer öffnet Objekte in anderen Apps und ändert selbst nie etwas.</string>
+</resources>

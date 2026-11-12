@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">StorageViewer</string>
+
+    <string name="nav_storage">Storage</string>
+    <string name="nav_apps">Apps</string>
+    <string name="storage_title">Storage</string>
+    <string name="apps_title">Apps</string>
+    <string name="internal_storage">Internal storage</string>
+
+    <string name="used_percent">%1$s used</string>
+    <string name="used_of_total">%1$s / %2$s</string>
+    <string name="used_subtitle">%1$s of %2$s used</string>
+
+    <string name="cat_apps">Apps</string>
+    <string name="cat_images">Images</string>
+    <string name="cat_videos">Videos</string>
+    <string name="cat_documents">Documents</string>
+    <string name="cat_audio">Audio</string>
+    <string name="cat_archives">Archives &amp; APKs</string>
+    <string name="cat_other">Other files</string>
+    <string name="cat_system">System</string>
+    <string name="cat_apps_system">Apps &amp; system</string>
+    <string name="cat_free">Free</string>
+
+    <string name="scanning">Scanning…</string>
+    <string name="scanning_progress">%1$s files · %2$s</string>
+    <string name="scan_failed">Scan failed: %1$s</string>
+    <string name="tree_summary">%1$s · %2$s</string>
+
+    <plurals name="items">
+        <item quantity="one">%s item</item>
+        <item quantity="other">%s items</item>
+    </plurals>
+    <plurals name="files">
+        <item quantity="one">%s file</item>
+        <item quantity="other">%s files</item>
+    </plurals>
+    <plurals name="folders">
+        <item quantity="one">%s folder</item>
+        <item quantity="other">%s folders</item>
+    </plurals>
+    <plurals name="apps_count">
+        <item quantity="one">%s app</item>
+        <item quantity="other">%s apps</item>
+    </plurals>
+    <plurals name="other_items">
+        <item quantity="one">%s other item</item>
+        <item quantity="other">%s other items</item>
+    </plurals>
+    <plurals name="other_apps">
+        <item quantity="one">%s other app</item>
+        <item quantity="other">%s other apps</item>
+    </plurals>
+    <plurals name="show_more">
+        <item quantity="one">Show %1$s more · %2$s</item>
+        <item quantity="other">Show %1$s more · %2$s</item>
+    </plurals>
+
+    <string name="protected_folder">Protected by Android · counted in Apps</string>
+    <string name="protected_note">Android doesn\'t let any app look inside Android/data and Android/obb. Their contents are counted in each app\'s size under Apps.</string>
+    <string name="empty_folder">Empty folder</string>
+
+    <string name="access_files_title">See what\'s using your storage</string>
+    <string name="access_files_body">StorageViewer needs All files access to measure folder sizes. It only looks: it never changes, moves or deletes anything.</string>
+    <string name="access_files_button">Allow access</string>
+    <string name="access_usage_title">Show full app sizes</string>
+    <string name="access_usage_body">Allow usage access so StorageViewer can read each app\'s data and cache size. Until then, only install sizes are shown.</string>
+    <string name="access_usage_button">Allow usage access</string>
+
+    <string name="action_refresh">Refresh</string>
+    <string name="action_overview">Overview</string>
+    <string name="action_back">Back</string>
+    <string name="action_search">Search</string>
+    <string name="action_clear_search">Clear search</string>
+    <string name="action_open">Open</string>
+    <string name="action_open_in_files">Open in My Files</string>
+    <string name="action_show_in_files">Show in My Files</string>
+
+    <string name="overview_title">Overview</string>
+    <string name="largest_files">Largest files, including subfolders</string>
+    <string name="contents">Contents</string>
+    <string name="folder_stats">%1$s · %2$s</string>
+
+    <string name="filter_all">All</string>
+    <string name="filter_downloaded">Downloaded</string>
+    <string name="filter_system">System</string>
+    <string name="search_apps">Search apps</string>
+    <string name="no_apps_found">No apps found</string>
+    <string name="loading_apps">Loading apps… %1$s / %2$s</string>
+    <string name="app_part_code">App</string>
+    <string name="app_part_data">Data</string>
+    <string name="app_part_cache">Cache</string>
+    <string name="app_install_size">Install size</string>
+    <string name="app_row_breakdown">Data %1$s · Cache %2$s</string>
+    <string name="apps_subtitle">%1$s · %2$s</string>
+    <string name="app_storage">App storage</string>
+    <string name="cache_hint">%1$s of this is cache, which apps can rebuild. You can clear it from each app\'s App info page.</string>
+
+    <string name="error_no_viewer">No app can open this file</string>
+    <string name="error_no_file_manager">No file manager found</string>
+    <string name="error_no_app_info">App info isn\'t available</string>
+    <string name="error_no_settings">This settings page isn\'t available</string>
+    <string name="read_only_note">Read-only: StorageViewer opens items in other apps and never changes anything itself.</string>
+</resources>
