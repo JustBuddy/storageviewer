@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wtf.buddyworks.storageviewer.R
 import wtf.buddyworks.storageviewer.data.FileCategory
@@ -78,7 +79,7 @@ fun RowScope.ItemContent(node: StorageNode, parentSize: Long, icons: ItemIcons) 
     if (node.isDirectory) {
         FolderIcon(node.restricted, icons)
     } else {
-        IconBadge(icons.category(node.category), categoryColor(node.category), size = ItemIconSize)
+        FileIcon(node, icons)
     }
     Spacer(Modifier.width(14.dp))
     Column(Modifier.weight(1f)) {
@@ -125,6 +126,14 @@ private fun itemSubtitle(node: StorageNode, parentSize: Long): String {
         }
     } else {
         categoryLabel(node.category ?: FileCategory.Other) + " · " + share
+    }
+}
+
+/** A file's thumbnail where it has one, else its type icon. */
+@Composable
+fun FileIcon(node: StorageNode, icons: ItemIcons, size: Dp = ItemIconSize) {
+    FileThumbnail(node, size) {
+        IconBadge(icons.category(node.category), categoryColor(node.category), size = size)
     }
 }
 

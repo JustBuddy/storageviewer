@@ -3,6 +3,7 @@ package wtf.buddyworks.storageviewer.ui.apps
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SpaceDashboard
 import androidx.compose.material.icons.outlined.QueryStats
@@ -41,14 +43,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import wtf.buddyworks.storageviewer.R
 import wtf.buddyworks.storageviewer.data.Access
@@ -246,46 +251,71 @@ private fun AppRow(
     }
 }
 
-/** My Files-style tab pill: All / Downloaded / System. */
+/**
+ * My Files-style tab pill: All / Downloaded / System. Each tab gets the width its label needs
+ * in bold (so selecting one never shifts the others) plus an equal share of what is left; a
+ * pill too narrow for all labels shrinks them proportionally and the text scales down to fit.
+ */
 @Composable
 private fun FilterTabs(selected: AppFilter, onSelect: (AppFilter) -> Unit) {
     val colors = OneUi.colors
-    val labels = mapOf(
+    val labels = listOf(
         AppFilter.All to stringResource(R.string.filter_all),
         AppFilter.Downloaded to stringResource(R.string.filter_downloaded),
         AppFilter.System to stringResource(R.string.filter_system),
     )
-    Row(
+    val style = OneUi.type.itemSubtitle
+    val boldStyle = style.copy(fontWeight = FontWeight.Bold)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val natural = remember(labels, boldStyle, density) {
+        labels.map { (_, label) ->
+            with(density) { measurer.measure(label, boldStyle, maxLines = 1).size.width.toDp() } + TabPadding * 2
+        }
+    }
+    BoxWithConstraints(
         Modifier
             .padding(horizontal = CardMargin)
             .padding(bottom = 14.dp)
             .fillMaxWidth()
             .clip(CircleShape)
             .background(colors.pill)
-            .padding(4.dp)
-            .selectableGroup(),
+            .padding(4.dp),
     ) {
-        AppFilter.entries.forEach { filter ->
-            val isSelected = filter == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .clip(CircleShape)
-                    .background(if (isSelected) colors.card else Color.Transparent)
-                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(filter) })
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    labels.getValue(filter),
-                    style = OneUi.type.itemSubtitle.copy(fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal),
-                    color = if (isSelected) colors.textPrimary else colors.textSecondary,
-                    maxLines = 1,
-                )
+        val needed = natural.fold(0.dp) { sum, width -> sum + width }
+        val spare = maxWidth - needed
+        val widths = if (spare >= 0.dp) {
+            natural.map { it + spare / natural.size }
+        } else {
+            natural.map { it * (maxWidth / needed) }
+        }
+        Row(Modifier.selectableGroup()) {
+            labels.forEachIndexed { index, (filter, label) ->
+                val isSelected = filter == selected
+                Box(
+                    Modifier
+                        .width(widths[index])
+                        .clip(CircleShape)
+                        .background(if (isSelected) colors.card else Color.Transparent)
+                        .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(filter) })
+                        .padding(horizontal = TabPadding, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = if (isSelected) boldStyle else style,
+                        color = if (isSelected) colors.textPrimary else colors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+                    )
+                }
             }
         }
     }
 }
+
+private val TabPadding = 12.dp
 
 @Composable
 private fun SearchField(query: String, onChange: (String) -> Unit, onClose: () -> Unit) {

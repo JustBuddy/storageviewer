@@ -269,14 +269,6 @@ private fun LazyListScope.treeItems(
             }
         }
     }
-    item(key = "tree-note", contentType = "note") {
-        Text(
-            stringResource(R.string.protected_note),
-            style = OneUi.type.caption,
-            color = OneUi.colors.textSection,
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 8.dp),
-        )
-    }
 }
 
 private val IndentStep = 18.dp

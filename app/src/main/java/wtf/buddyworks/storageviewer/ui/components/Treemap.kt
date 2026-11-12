@@ -64,6 +64,11 @@ data class TreemapItem(
     /** Contents drawn as a preview inside the tile (folders only), largest first. */
     val children: List<TreemapChild> = emptyList(),
     val icon: (@Composable () -> Unit)? = null,
+    /**
+     * Small tiles show only the [icon] when true (apps, recognisable by icon). False keeps the
+     * name instead and shows the icon only on tiles tall enough for both (files).
+     */
+    val iconOnlyWhenSmall: Boolean = true,
     val clickable: Boolean = true,
 )
 
@@ -73,6 +78,15 @@ val TreemapMinTileHeight = 54.dp
 
 /** Smallest tile for items with an icon: the icon alone identifies them. */
 val TreemapMinIconTile = 46.dp
+
+/**
+ * Whether a treemap says more than the list it sits above. Not for a handful of items (the list
+ * shows each one with its share bar) and not when only one item gets a tile of its own (one
+ * block beside "N other items" says nothing the list does not).
+ */
+fun treemapWorthShowing(itemCount: Int, ownTiles: Int): Boolean = itemCount > TreemapMinItems && ownTiles >= 2
+
+private const val TreemapMinItems = 6
 
 /** Smallest preview block that still fits a one-line name. */
 private val PreviewMinWidth = 62.dp
@@ -178,7 +192,7 @@ private fun Tile(item: TreemapItem, modifier: Modifier, widthDp: Float, heightDp
     val ink = inkFor(item.color)
     val measurer = rememberTextMeasurer()
     // Small tiles of items with an icon (apps) show just the icon, plus the size if it fits.
-    if (item.icon != null && (widthDp < 64f || heightDp < 84f)) {
+    if (item.icon != null && item.iconOnlyWhenSmall && (widthDp < 64f || heightDp < 84f)) {
         Box(modifier.background(item.color), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 item.icon.invoke()
@@ -307,7 +321,7 @@ private val TileDetail = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
 private val PreviewLabel = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, lineHeight = 14.sp)
 
 /** White or near-black text on a coloured fill, whichever reads better. */
-private fun inkFor(fill: Color): Color = if (fill.luminance() > 0.45f) Color(0xFF141414) else Color.White
+fun inkFor(fill: Color): Color = if (fill.luminance() > 0.45f) Color(0xFF141414) else Color.White
 
 /**
  * Squarified treemap layout (Bruls, Huizing & van Wijk). [values] should be sorted descending;
